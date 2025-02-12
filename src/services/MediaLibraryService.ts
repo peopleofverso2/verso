@@ -1,10 +1,18 @@
 import { MediaStorageAdapter, MediaFile, MediaMetadata, MediaFilter } from '../types/media';
 import { LocalStorageAdapter } from './storage/LocalStorageAdapter';
+import { resizeImage, ResizeOptions } from '../utils/imageResizer';
 
 export class MediaLibraryService {
   private static instance: MediaLibraryService;
   private storageAdapter: MediaStorageAdapter;
   private urlCache: Map<string, string> = new Map();
+
+  private readonly DEFAULT_IMAGE_OPTIONS: ResizeOptions = {
+    maxWidth: 2560,
+    maxHeight: 1440,
+    maintainAspectRatio: true,
+    quality: 0.95
+  };
 
   private constructor() {
     // L'adaptateur sera initialisé dans init()
@@ -27,26 +35,75 @@ export class MediaLibraryService {
   }
 
   async uploadMedia(file: File, metadata: Partial<MediaMetadata> = {}): Promise<MediaFile> {
-    if (!file.type.startsWith('video/') && !file.type.startsWith('image/')) {
+    // Vérifier si c'est un fichier .pov
+    if (file.name.endsWith('.pov')) {
+      const autoMetadata: Partial<MediaMetadata> = {
+        ...metadata,
+        type: 'pov',
+        mimeType: 'application/pov',
+      };
+      return this.storageAdapter.saveMedia(file, autoMetadata);
+    }
+
+    // Pour les autres types de fichiers
+    if (!file.type.startsWith('video/') && 
+        !file.type.startsWith('image/') && 
+        !file.type.startsWith('audio/')) {
       throw new Error('Type de fichier non supporté');
     }
 
     const autoMetadata: Partial<MediaMetadata> = {
       ...metadata,
-      type: file.type.startsWith('video/') ? 'video' : 'image',
+      type: file.type.startsWith('video/') 
+        ? 'video' 
+        : file.type.startsWith('image/') 
+          ? 'image' 
+          : 'audio',
     };
 
-    if (file.type.startsWith('video/')) {
+    let processedFile = file;
+    
+    // Redimensionner l'image si nécessaire
+    if (file.type.startsWith('image/')) {
+      try {
+        // Obtenir les dimensions originales
+        const originalDimensions = await this.getMediaDimensions(file);
+        
+        // Ne redimensionner que si l'image est plus grande que les dimensions maximales
+        if (originalDimensions && 
+            (originalDimensions.width > this.DEFAULT_IMAGE_OPTIONS.maxWidth || 
+             originalDimensions.height > this.DEFAULT_IMAGE_OPTIONS.maxHeight)) {
+          processedFile = await resizeImage(file, this.DEFAULT_IMAGE_OPTIONS);
+          const dimensions = await this.getMediaDimensions(processedFile);
+          if (dimensions) {
+            autoMetadata.dimensions = dimensions;
+          }
+        } else if (originalDimensions) {
+          // Garder les dimensions originales si pas de redimensionnement
+          autoMetadata.dimensions = originalDimensions;
+        }
+      } catch (error) {
+        console.error('Error processing image:', error);
+        // Continuer avec le fichier original en cas d'erreur
+        processedFile = file;
+      }
+    } else if (file.type.startsWith('video/')) {
       const duration = await this.getVideoDuration(file);
       autoMetadata.duration = duration;
+      const dimensions = await this.getMediaDimensions(file);
+      if (dimensions) {
+        autoMetadata.dimensions = dimensions;
+      }
+    } else if (file.type.startsWith('audio/')) {
+      try {
+        const duration = await this.getAudioDuration(file);
+        autoMetadata.duration = duration;
+      } catch (error) {
+        console.warn('Erreur lors de la récupération de la durée audio:', error);
+      }
     }
 
-    const dimensions = await this.getMediaDimensions(file);
-    if (dimensions) {
-      autoMetadata.dimensions = dimensions;
-    }
-
-    const mediaFile = await this.storageAdapter.saveMedia(file, autoMetadata);
+    const mediaFile = await this.storageAdapter.saveMedia(processedFile, autoMetadata);
     
     // Mettre en cache l'URL
     if (mediaFile.url) {
@@ -113,6 +170,25 @@ export class MediaLibraryService {
       } else {
         resolve(undefined);
       }
+    });
+  }
+
+  private getAudioDuration(file: File): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio();
+      const url = URL.createObjectURL(file);
+
+      audio.onloadedmetadata = () => {
+        URL.revokeObjectURL(url);
+        resolve(audio.duration);
+      };
+
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('Erreur lors du chargement de l\'audio'));
+      };
+
+      audio.src = url;
     });
   }
 

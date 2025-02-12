@@ -125,21 +125,38 @@ export class LocalStorageAdapter implements MediaStorageAdapter {
   }
 
   async saveMedia(file: File, partialMetadata: Partial<MediaMetadata>): Promise<MediaFile> {
+    console.log('Starting saveMedia...', { fileName: file.name, fileType: file.type, size: file.size });
+    
     try {
       const id = partialMetadata.id || this.generateId();
+      console.log('Generated/Using ID:', id);
       
+      // Nettoyer les anciennes URLs
       if (this.urlCache.has(id)) {
+        console.log('Cleaning up old URL for ID:', id);
         URL.revokeObjectURL(this.urlCache.get(id)!);
         this.urlCache.delete(id);
       }
       if (this.thumbnailUrlCache.has(id)) {
+        console.log('Cleaning up old thumbnail URL for ID:', id);
         URL.revokeObjectURL(this.thumbnailUrlCache.get(id)!);
         this.thumbnailUrlCache.delete(id);
       }
 
+      // Vérifier la validité du fichier
+      if (!file.size) {
+        throw new Error('File is empty');
+      }
+
+      if (!(file instanceof File)) {
+        throw new Error('Invalid file object');
+      }
+
       const metadata: MediaMetadata = {
         id,
-        type: file.type.startsWith('video/') ? 'video' : 'image',
+        type: file.type.startsWith('video/') ? 'video' : 
+              file.type.startsWith('image/') ? 'image' : 
+              file.type.startsWith('audio/') ? 'audio' : 'unknown',
         mimeType: file.type,
         name: file.name,
         size: file.size,
@@ -149,41 +166,75 @@ export class LocalStorageAdapter implements MediaStorageAdapter {
         ...partialMetadata,
       };
 
+      console.log('Prepared metadata:', metadata);
+
+      // Obtenir une connexion à la base de données
+      console.log('Getting database connection...');
       const db = await this.getDb();
+      
+      // Sauvegarder le fichier et les métadonnées
+      console.log('Saving file to media store...');
       await db.put(LocalStorageAdapter.MEDIA_STORE, file, id);
+      
+      console.log('Saving metadata...');
       await db.put(LocalStorageAdapter.METADATA_STORE, metadata, id);
 
+      // Générer la miniature pour les vidéos
       if (file.type.startsWith('video/')) {
+        console.log('Generating thumbnail for video...');
         const thumbnail = await this.generateThumbnail(file);
         if (thumbnail) {
+          console.log('Saving thumbnail...');
           await db.put(LocalStorageAdapter.THUMBNAIL_STORE, thumbnail, id);
         }
       }
 
+      // Créer les URLs
+      console.log('Creating object URL for file...');
       const mediaUrl = URL.createObjectURL(file);
       this.urlCache.set(id, mediaUrl);
       
       let thumbnailUrl: string | undefined;
       if (file.type.startsWith('video/')) {
+        console.log('Getting thumbnail from store...');
         const thumbnail = await db.get(LocalStorageAdapter.THUMBNAIL_STORE, id);
         if (thumbnail) {
+          console.log('Creating thumbnail URL...');
           thumbnailUrl = URL.createObjectURL(thumbnail);
           this.thumbnailUrlCache.set(id, thumbnailUrl);
         }
       }
 
-      return {
+      const result = {
         id,
         url: mediaUrl,
         thumbnailUrl,
         metadata,
       };
+
+      console.log('Media save completed successfully:', result);
+      return result;
+      
     } catch (error) {
-      console.error('Error in saveMedia:', error);
-      if (error instanceof Error && error.name === 'NotFoundError') {
-        await this.resetDatabase();
-        return this.saveMedia(file, partialMetadata);
+      console.error('Detailed error in saveMedia:', {
+        error,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size
+      });
+      
+      if (error instanceof Error) {
+        if (error.name === 'NotFoundError') {
+          console.log('Database not found, attempting reset...');
+          await this.resetDatabase();
+          return this.saveMedia(file, partialMetadata);
+        }
+        
+        if (error.name === 'QuotaExceededError') {
+          throw new Error('Storage quota exceeded. Please free up some space.');
+        }
       }
+      
       throw error;
     }
   }
