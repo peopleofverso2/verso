@@ -16,6 +16,7 @@ import {
   Save as SaveIcon,
   ArrowBack as ArrowBackIcon,
   VideoCall as VideoIcon,
+  PhotoLibrary as MediaIcon,
 } from '@mui/icons-material';
 
 const SidebarContainer = styled(Paper)(({ theme }) => ({
@@ -149,38 +150,71 @@ const Sidebar: React.FC<SidebarProps> = ({
             border: '1px dashed grey',
             borderRadius: 1,
             bgcolor: 'background.default',
-            cursor: 'grab',
-            mb: 2,
           }}
-          onDragStart={(event: DragEvent) => onDragStart(event, 'videoNode2')}
-          draggable
         >
-          <VideoIcon 
-            sx={{ 
-              color: 'primary.main',
-              fontSize: 28,
-            }} 
-          />
-          <Box>
-            <Typography 
-              variant="subtitle2" 
+          <DraggableNode
+            onDragStart={(event: DragEvent) => onDragStart(event, 'videoNode2')}
+            draggable
+          >
+            <VideoIcon 
               sx={{ 
-                fontWeight: 600,
-                color: 'text.primary',
-              }}
-            >
-              Video Node
-            </Typography>
-            <Typography 
-              variant="caption" 
+                color: 'primary.main',
+                fontSize: 28,
+              }} 
+            />
+            <Box>
+              <Typography 
+                variant="subtitle2" 
+                sx={{ 
+                  fontWeight: 600,
+                  color: 'text.primary',
+                }}
+              >
+                Video Node
+              </Typography>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  color: 'text.secondary',
+                  display: 'block',
+                }}
+              >
+                Drag to add a video element
+              </Typography>
+            </Box>
+          </DraggableNode>
+
+          <DraggableNode
+            onDragStart={(event: DragEvent) => onDragStart(event, 'mediaNode')}
+            draggable
+          >
+            <MediaIcon 
               sx={{ 
-                color: 'text.secondary',
-                display: 'block',
-              }}
-            >
-              Drag to add a video element
-            </Typography>
-          </Box>
+                color: 'primary.main',
+                fontSize: 28,
+              }} 
+            />
+            <Box>
+              <Typography 
+                variant="subtitle2" 
+                sx={{ 
+                  fontWeight: 600,
+                  color: 'text.primary',
+                }}
+              >
+                Media Node
+              </Typography>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  color: 'text.secondary',
+                  display: 'block',
+                }}
+              >
+                Drag to add an image or video
+              </Typography>
+            </Box>
+          </DraggableNode>
         </Box>
       </Box>
 

@@ -65,56 +65,81 @@ export class PovExportService {
 
     console.log('Exporting scenario:', { title, nodes, edges });
 
-    // Collecter tous les IDs de médias utilisés dans les nœuds
-    const mediaIds = nodes
-      .map(node => node.data?.mediaId)
-      .filter((id): id is string => !!id);
+    const media = await this.collectMediaFromNodes(nodes);
+    const povFile = await this.createPovFile(nodes, edges, media);
 
-    console.log('Media IDs found:', mediaIds);
+    console.log('POV file created:', povFile);
 
-    // Récupérer les métadonnées des médias
-    const media: Record<string, MediaFile> = {};
-    for (const mediaId of mediaIds) {
-      try {
-        const mediaFile = await this.mediaLibrary.getMedia(mediaId);
-        if (mediaFile) {
-          media[mediaId] = mediaFile;
-        }
-      } catch (error) {
-        console.error(`Error getting media ${mediaId}:`, error);
+    return povFile;
+  }
+
+  private async collectMediaFromNodes(nodes: Node[]): Promise<Record<string, MediaFile>> {
+    const mediaIds = new Set<string>();
+    console.log('Collecting media from nodes:', nodes);
+
+    // Collecter tous les IDs de médias des nœuds
+    nodes.forEach(node => {
+      if (node.data?.mediaId) {
+        mediaIds.add(node.data.mediaId);
       }
-    }
+      // Ajouter la collecte des IDs audio
+      if (node.data?.audioId) {
+        console.log('Found audio ID:', node.data.audioId);
+        mediaIds.add(node.data.audioId);
+      }
+    });
 
-    console.log('Media collected:', Object.keys(media));
+    console.log('Media IDs found:', Array.from(mediaIds));
+
+    // Récupérer tous les médias
+    const mediaPromises = Array.from(mediaIds).map(async id => {
+      const media = await this.mediaLibrary.getMedia(id);
+      return media;
+    });
+
+    const mediaFiles = await Promise.all(mediaPromises);
+    console.log('Media collected:', mediaFiles);
+
+    // Créer un objet avec les médias indexés par ID
+    const mediaMap: Record<string, MediaFile> = {};
+    mediaFiles.forEach(media => {
+      if (media) {
+        mediaMap[media.id] = media;
+      }
+    });
+
+    return mediaMap;
+  }
+
+  private async createPovFile(nodes: Node[], edges: Edge[], media: Record<string, MediaFile>): Promise<PovFile> {
+    console.log('Creating POV file with:', { nodes, edges, media });
+    
+    // Convertir les nœuds pour le fichier POV
+    const povNodes = nodes.map(node => ({
+      id: node.id,
+      type: node.type,
+      data: {
+        ...node.data,
+        // S'assurer que l'audioId est inclus
+        audioId: node.data?.audioId,
+        content: {
+          ...node.data?.content,
+          // Inclure les paramètres audio s'ils existent
+          audio: node.data?.content?.audio,
+          choices: node.data?.content?.choices || [],
+          timer: node.data?.content?.timer,
+        }
+      }
+    }));
 
     // Créer le fichier POV
-    const povFile = {
-      nodes: nodes.map(node => ({
-        id: node.id,
-        type: node.type,
-        data: {
-          mediaId: node.data?.mediaId,
-          content: {
-            choices: node.data?.content?.choices || [],
-            videoUrl: node.data?.content?.videoUrl,
-            video: node.data?.content?.video
-          }
-        }
-      })),
-      edges: edges.map(edge => ({
-        id: edge.id,
-        source: edge.source,
-        target: edge.target,
-        sourceHandle: edge.sourceHandle || '',
-        data: {
-          label: edge.data?.label
-        }
-      })),
+    const povFile: PovFile = {
+      nodes: povNodes,
+      edges,
       media
     };
 
     console.log('POV file created:', povFile);
-
     return povFile;
   }
 
@@ -189,6 +214,7 @@ export class PovExportService {
     }
 
     try {
+      console.log('Starting POV file import:', file.name);
       const content = await file.text();
       const povData = JSON.parse(content);
 
@@ -197,29 +223,71 @@ export class PovExportService {
         throw new Error('Invalid POV file format');
       }
 
-      console.log('Importing POV file:', povData);
+      console.log('POV file validation successful');
 
       // Importer les médias dans la bibliothèque locale
+      const importedMedia: Record<string, MediaFile> = {};
       for (const [mediaId, mediaFile] of Object.entries(povData.media)) {
         try {
-          await this.mediaLibrary.importMedia(mediaFile);
+          console.log(`Importing media ${mediaId}...`, mediaFile);
+          const imported = await this.mediaLibrary.importMedia({
+            ...mediaFile,
+            metadata: {
+              ...mediaFile.metadata,
+              type: mediaFile.metadata.type === 'pov' ? 'pov' : mediaFile.metadata.type
+            }
+          });
+          importedMedia[mediaId] = imported;
           console.log(`Media ${mediaId} imported successfully`);
         } catch (error) {
           console.error(`Error importing media ${mediaId}:`, error);
-          throw new Error(`Failed to import media ${mediaId}`);
+          throw new Error(`Failed to import media ${mediaId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
 
-      // Convertir les nœuds POV en nœuds ReactFlow
-      const nodes: Node[] = povData.nodes.map(node => ({
-        id: node.id,
-        type: node.type,
-        position: { x: 0, y: 0 }, // Position par défaut, à ajuster par l'éditeur
-        data: {
-          mediaId: node.data.mediaId,
-          content: node.data.content
-        }
-      }));
+      // Convertir les nœuds POV en nœuds ReactFlow en préservant toute la structure
+      const nodes: Node[] = povData.nodes.map(node => {
+        // Récupérer le média correspondant
+        const mediaFile = importedMedia[node.data?.mediaId];
+        
+        // Préserver la structure exacte du node
+        const nodeData = {
+          ...node.data,
+          mediaId: node.data?.mediaId,
+          mediaType: mediaFile?.metadata?.type,
+          audioId: node.data?.audioId,
+          content: {
+            ...node.data?.content,
+            timer: node.data?.content?.timer && {
+              duration: node.data.content.timer.duration,
+              autoTransition: node.data.content.timer.autoTransition ?? true,
+              loop: node.data.content.timer.loop ?? false,
+              pauseOnInteraction: node.data.content.timer.pauseOnInteraction ?? false
+            },
+            audio: node.data?.content?.audio && {
+              volume: node.data.content.audio.volume ?? 1,
+              loop: node.data.content.audio.loop ?? false,
+              fadeIn: node.data.content.audio.fadeIn,
+              fadeOut: node.data.content.audio.fadeOut
+            },
+            choices: node.data?.content?.choices ?? [],
+            videoUrl: mediaFile?.url,
+            imageUrl: mediaFile?.url
+          },
+          isPlaybackMode: node.data?.isPlaybackMode,
+          onMediaEnd: node.data?.onMediaEnd,
+          onDataChange: node.data?.onDataChange
+        };
+
+        console.log(`Node ${node.id} data:`, nodeData);
+
+        return {
+          id: node.id,
+          type: node.type,
+          position: node.position || { x: 0, y: 0 },
+          data: nodeData
+        };
+      });
 
       // Convertir les edges POV en edges ReactFlow
       const edges: Edge[] = povData.edges.map(edge => ({
@@ -227,15 +295,22 @@ export class PovExportService {
         source: edge.source,
         target: edge.target,
         sourceHandle: edge.sourceHandle || undefined,
-        data: edge.data
+        data: {
+          ...edge.data,
+          label: edge.data?.label
+        }
       }));
 
-      console.log('POV file imported successfully:', { nodes, edges });
+      console.log('POV file import completed successfully', {
+        nodesCount: nodes.length,
+        edgesCount: edges.length,
+        mediaCount: Object.keys(importedMedia).length
+      });
 
       return {
         nodes,
         edges,
-        media: povData.media
+        media: importedMedia
       };
     } catch (error) {
       console.error('Error importing POV file:', error);

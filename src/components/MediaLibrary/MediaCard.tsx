@@ -14,9 +14,13 @@ import {
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
+  PlayArrow as PlayArrowIcon,
+  Image as ImageIcon,
+  MusicNote as MusicNoteIcon,
+  Movie as MovieIcon,
 } from '@mui/icons-material';
 import { MediaFile } from '../../types/media';
-import ReactPlayer from 'react-player';
+import MediaPreview from './MediaPreview';
 
 interface MediaCardProps {
   mediaFile: MediaFile;
@@ -33,7 +37,6 @@ export default function MediaCard({
 }: MediaCardProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const isVideo = mediaFile.metadata.type === 'video';
 
   const handlePreviewClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -59,6 +62,83 @@ export default function MediaCard({
     setDeleteDialogOpen(false);
   };
 
+  const renderThumbnail = () => {
+    switch (mediaFile.metadata.type) {
+      case 'video':
+        return (
+          <>
+            <CardMedia
+              component="img"
+              image={mediaFile.thumbnailUrl || mediaFile.url}
+              alt={mediaFile.metadata.name}
+              sx={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+              }}
+            />
+            <Box
+              sx={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                bgcolor: 'rgba(0, 0, 0, 0.5)',
+                borderRadius: '50%',
+                p: 1,
+              }}
+            >
+              <PlayArrowIcon sx={{ color: 'white', fontSize: 40 }} />
+            </Box>
+          </>
+        );
+      case 'image':
+        return (
+          <CardMedia
+            component="img"
+            image={mediaFile.url}
+            alt={mediaFile.metadata.name}
+            sx={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+          />
+        );
+      case 'audio':
+        return (
+          <Box
+            sx={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              bgcolor: 'action.hover',
+            }}
+          >
+            <MusicNoteIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+            <Box
+              sx={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                bgcolor: 'rgba(0, 0, 0, 0.5)',
+                borderRadius: '50%',
+                p: 1,
+              }}
+            >
+              <PlayArrowIcon sx={{ color: 'white', fontSize: 40 }} />
+            </Box>
+          </Box>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <>
       <Card 
@@ -67,7 +147,14 @@ export default function MediaCard({
           width: '100%',
           paddingTop: '56.25%', // 16:9 aspect ratio
           bgcolor: 'background.paper',
+          cursor: 'pointer',
+          '&:hover': {
+            '& .media-overlay': {
+              opacity: 1,
+            },
+          },
         }}
+        onClick={handlePreviewClick}
       >
         <Box
           sx={{
@@ -76,18 +163,20 @@ export default function MediaCard({
             left: 0,
             width: '100%',
             height: '100%',
-            cursor: 'pointer',
           }}
-          onClick={handlePreviewClick}
         >
-          <CardMedia
-            component="img"
-            image={mediaFile.thumbnailUrl || mediaFile.url}
-            alt={mediaFile.metadata.name}
+          {renderThumbnail()}
+          <Box
+            className="media-overlay"
             sx={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              bgcolor: 'rgba(0, 0, 0, 0.3)',
+              opacity: 0,
+              transition: 'opacity 0.2s',
             }}
           />
           <Typography
@@ -154,30 +243,11 @@ export default function MediaCard({
       </Card>
 
       {/* Dialog de prévisualisation */}
-      <Dialog
+      <MediaPreview
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogContent sx={{ p: 0, bgcolor: 'black' }}>
-          {isVideo ? (
-            <ReactPlayer
-              url={mediaFile.url}
-              controls
-              width="100%"
-              height="auto"
-              style={{ aspectRatio: '16/9' }}
-            />
-          ) : (
-            <img
-              src={mediaFile.url}
-              style={{ width: '100%', height: 'auto' }}
-              alt={mediaFile.metadata.name}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+        mediaFile={mediaFile}
+      />
 
       {/* Dialog de confirmation de suppression */}
       <Dialog

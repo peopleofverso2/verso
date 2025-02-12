@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Grid,
@@ -8,6 +8,8 @@ import {
   Autocomplete,
   Snackbar,
   Alert,
+  Stack,
+  Typography,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -18,6 +20,7 @@ import { MediaFile, MediaFilter } from '../../types/media';
 import { MediaLibraryService } from '../../services/MediaLibraryService';
 import MediaCard from './MediaCard';
 import UploadDialog from './UploadDialog';
+import MediaTypeFilter, { MediaType } from './MediaTypeFilter';
 
 interface MediaLibraryProps {
   onSelect?: (mediaFiles: MediaFile[]) => void;
@@ -25,14 +28,26 @@ interface MediaLibraryProps {
   acceptedTypes?: string[];
 }
 
+export const ACCEPTED_TYPES = [
+  'video/mp4',
+  'video/webm',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'audio/mpeg',
+  'audio/wav',
+  'audio/ogg'
+];
+
 export default function MediaLibrary({ 
   onSelect,
   multiSelect = true,
-  acceptedTypes = []
+  acceptedTypes = ACCEPTED_TYPES
 }: MediaLibraryProps) {
   const [media, setMedia] = useState<MediaFile[]>([]);
   const [filter, setFilter] = useState<MediaFilter>({});
   const [search, setSearch] = useState('');
+  const [mediaType, setMediaType] = useState<MediaType>('all');
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -47,28 +62,75 @@ export default function MediaLibrary({
     severity: 'success'
   });
 
+  // Filtrer les médias en fonction du type sélectionné et de la recherche
+  const filteredMedia = useMemo(() => {
+    return media.filter(file => {
+      // Filtre par type de média
+      if (mediaType !== 'all' && file.metadata.type !== mediaType) {
+        return false;
+      }
+
+      // Filtre par recherche
+      if (search) {
+        const searchLower = search.toLowerCase();
+        return (
+          file.metadata.name.toLowerCase().includes(searchLower) ||
+          file.metadata.tags?.some(tag => tag.toLowerCase().includes(searchLower))
+        );
+      }
+
+      return true;
+    });
+  }, [media, mediaType, search]);
+
   useEffect(() => {
     const loadMedia = async () => {
       try {
+        console.log('Starting media loading...');
+        console.log('Accepted types:', acceptedTypes);
+        
         const mediaLibrary = await MediaLibraryService.getInstance();
+        console.log('MediaLibrary instance obtained');
+        
         const mediaFiles = await mediaLibrary.listMedia(filter);
-        setMedia(mediaFiles.filter(file => 
-          acceptedTypes.length === 0 || 
-          acceptedTypes.some(type => {
-            const [category] = type.split('/');
-            return file.metadata.type === category || type === '*/*';
-          })
-        ));
-      } catch (error) {
-        console.error('Error loading media:', error);
-        setSnackbar({
-          open: true,
-          message: 'Error loading media',
-          severity: 'error'
+        console.log('Raw media files:', mediaFiles);
+        
+        const filteredFiles = mediaFiles.filter(file => {
+          if (!file || !file.metadata) {
+            console.warn('Invalid media file:', file);
+            return false;
+          }
+          
+          const isAccepted = acceptedTypes.length === 0 || 
+            acceptedTypes.some(type => {
+              const [category] = type.split('/');
+              const isMatch = file.metadata.type === category || type === '*/*';
+              console.log('Type check:', {
+                fileType: file.metadata.type,
+                category,
+                type,
+                isMatch
+              });
+              return isMatch;
+            });
+            
+          if (!isAccepted) {
+            console.log('File rejected:', file.metadata.name);
+          }
+          return isAccepted;
         });
+        
+        console.log('Filtered media files:', filteredFiles);
+        setMedia(filteredFiles);
+      } catch (error) {
+        console.error('Detailed error loading media:', error);
+        if (error instanceof Error) {
+          showError(`Error loading media: ${error.message}`);
+        } else {
+          showError('Unknown error loading media');
+        }
       }
     };
-
     loadMedia();
   }, [filter, acceptedTypes]);
 
@@ -164,19 +226,31 @@ export default function MediaLibrary({
   };
 
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ p: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
-        <TextField
-          size="small"
-          placeholder="Rechercher..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          InputProps={{
-            startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-          }}
-          sx={{ flexGrow: 1 }}
-        />
-        
+    <Box sx={{ p: 2 }}>
+      <Stack spacing={2}>
+        {/* Barre de recherche et filtres */}
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+          <TextField
+            size="small"
+            placeholder="Rechercher..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            InputProps={{
+              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+            }}
+            sx={{ flexGrow: 1 }}
+          />
+          <MediaTypeFilter value={mediaType} onChange={setMediaType} />
+          <Button
+            variant="contained"
+            startIcon={<CloudUploadIcon />}
+            onClick={() => setUploadOpen(true)}
+          >
+            Upload
+          </Button>
+        </Box>
+
+        {/* Tags */}
         <Autocomplete
           multiple
           size="small"
@@ -184,79 +258,33 @@ export default function MediaLibrary({
           value={selectedTags}
           onChange={(_, newValue) => setSelectedTags(newValue)}
           renderInput={(params) => (
-            <TextField
-              {...params}
-              placeholder="Tags"
-              sx={{ minWidth: 200 }}
-            />
+            <TextField {...params} placeholder="Filtrer par tags..." />
           )}
-          sx={{ flexGrow: 1 }}
         />
-        
-        <Button
-          variant="contained"
-          startIcon={<CloudUploadIcon />}
-          onClick={() => setUploadOpen(true)}
-        >
-          Upload
-        </Button>
-        
-        {selectedMedia.size > 0 && onSelect && (
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<CheckIcon />}
-            onClick={() => {
-              const selectedFiles = media.filter(m => selectedMedia.has(m.metadata.id));
-              onSelect(selectedFiles);
-            }}
-          >
-            Valider ({selectedMedia.size})
-          </Button>
-        )}
-      </Box>
 
-      <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
+        {/* Grille de médias */}
         <Grid container spacing={2}>
-          {media.map((mediaFile) => (
+          {filteredMedia.map((mediaFile) => (
             <Grid item xs={12} sm={6} md={4} lg={3} key={mediaFile.metadata.id}>
               <MediaCard
                 mediaFile={mediaFile}
+                onSelect={handleSelect}
+                onDelete={handleDelete}
                 selected={selectedMedia.has(mediaFile.metadata.id)}
-                onSelect={() => {
-                  if (!onSelect) return;
-                  
-                  const newSelection = new Set(selectedMedia);
-                  if (multiSelect) {
-                    if (newSelection.has(mediaFile.metadata.id)) {
-                      newSelection.delete(mediaFile.metadata.id);
-                    } else {
-                      newSelection.add(mediaFile.metadata.id);
-                    }
-                  } else {
-                    newSelection.clear();
-                    newSelection.add(mediaFile.metadata.id);
-                  }
-                  setSelectedMedia(newSelection);
-                }}
-                onDelete={async () => {
-                  try {
-                    await handleDelete(mediaFile);
-                  } catch (error) {
-                    console.error('Error deleting media:', error);
-                    setSnackbar({
-                      open: true,
-                      message: 'Error deleting media',
-                      severity: 'error'
-                    });
-                  }
-                }}
               />
             </Grid>
           ))}
         </Grid>
-      </Box>
 
+        {/* Message si aucun résultat */}
+        {filteredMedia.length === 0 && (
+          <Typography variant="body1" color="text.secondary" align="center">
+            Aucun média trouvé
+          </Typography>
+        )}
+      </Stack>
+
+      {/* Dialogs et notifications */}
       <UploadDialog
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
@@ -267,12 +295,29 @@ export default function MediaLibrary({
       <Snackbar
         open={snackbar.open}
         autoHideDuration={6000}
-        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
       >
-        <Alert severity={snackbar.severity} onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* Bouton de confirmation pour la sélection multiple */}
+      {multiSelect && selectedMedia.size > 0 && (
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<CheckIcon />}
+          onClick={handleConfirmSelection}
+          sx={{
+            position: 'fixed',
+            bottom: 16,
+            right: 16,
+          }}
+        >
+          Confirmer ({selectedMedia.size})
+        </Button>
+      )}
     </Box>
   );
 }
