@@ -222,6 +222,21 @@ const Sidebar: React.FC<SidebarProps> = ({
       {children}
 
       <Box sx={{ mt: 'auto' }}>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<PlayIcon />}
+          fullWidth
+          onClick={onStartPlayback}
+          sx={{
+            mb: 2,
+            borderRadius: 2,
+            textTransform: 'none',
+            fontWeight: 600,
+          }}
+        >
+          Play Scenario
+        </Button>
         <Typography 
           variant="caption" 
           sx={{ 
