@@ -447,19 +447,12 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
             fitView
             snapToGrid
             snapGrid={[15, 15]}
+            minZoom={0.05}
+            maxZoom={8}
+            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
           >
             <Background />
             <Controls />
-            <MiniMap 
-              nodeColor={(node) => {
-                switch (node.type) {
-                  case 'videoNode2':
-                    return '#00ff00';
-                  default:
-                    return '#eee';
-                }
-              }}
-            />
           </ReactFlow>
           
           {/* Bouton de lecture POV */}
