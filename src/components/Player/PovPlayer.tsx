@@ -41,8 +41,9 @@ interface PovPlayerProps {
 const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [choices, setChoices] = useState<{ id: string; text: string; targetId: string }[]>([]);
+  const [choices, setChoices] = useState<{ id: string; text: string; targetId: string; handleId: string }[]>([]);
   const [videoEnded, setVideoEnded] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaLibrary = useRef(MediaLibraryService.getInstance());
 
@@ -59,6 +60,26 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
     }
   }, [scenario]);
 
+  // Trouver le nœud suivant en fonction des edges
+  const findNextNode = useCallback((currentNodeId: string, handleId?: string) => {
+    if (!scenario || !scenario.edges) return null;
+    
+    const edges = scenario.edges.filter(e => e.source === currentNodeId);
+    
+    // Si un handleId est spécifié (choix spécifique)
+    if (handleId) {
+      const edge = edges.find(e => e.sourceHandle === handleId);
+      return edge?.target;
+    }
+    
+    // S'il n'y a qu'un seul edge (transition automatique)
+    if (edges.length === 1 && !edges[0].sourceHandle) {
+      return edges[0].target;
+    }
+    
+    return null;
+  }, [scenario]);
+
   // Charger la vidéo du nœud actuel
   useEffect(() => {
     const loadVideo = async () => {
@@ -68,6 +89,7 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
       if (!node || !node.data) return;
 
       setVideoEnded(false);
+      setIsPaused(false);
 
       // Récupérer l'URL de la vidéo
       let url = null;
@@ -90,19 +112,23 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
       
       const availableChoices = nodeChoices.map(choice => {
         const edge = edges.find(e => e.sourceHandle === `button-handle-${choice.id}`);
+        if (!edge) return null;
+        
         return {
           id: choice.id,
           text: choice.text,
-          targetId: edge?.target || ''
+          targetId: edge.target,
+          handleId: edge.sourceHandle || ''
         };
-      }).filter(choice => choice.targetId);
+      }).filter((choice): choice is { id: string; text: string; targetId: string; handleId: string } => choice !== null);
 
       // Si pas de choix mais un lien simple, créer un choix "Continuer"
-      if (availableChoices.length === 0 && edges.length === 1) {
+      if (availableChoices.length === 0 && edges.length === 1 && !edges[0].sourceHandle) {
         availableChoices.push({
           id: 'continue',
           text: 'Continuer',
-          targetId: edges[0].target
+          targetId: edges[0].target,
+          handleId: ''
         });
       }
 
@@ -123,13 +149,32 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
   const handleVideoEnd = useCallback(() => {
     console.log('Video ended');
     setVideoEnded(true);
+    
+    // Vérifier s'il y a une transition automatique
+    const nextNodeId = findNextNode(currentNodeId);
+    if (nextNodeId) {
+      setCurrentNodeId(nextNodeId);
+      setVideoEnded(false);
+    }
+  }, [currentNodeId, findNextNode]);
+
+  // Gérer la pause de la vidéo
+  const handleVideoPause = useCallback(() => {
+    setIsPaused(true);
+  }, []);
+
+  // Gérer la reprise de la vidéo
+  const handleVideoPlay = useCallback(() => {
+    setIsPaused(false);
   }, []);
 
   // Gérer le choix de l'utilisateur
-  const handleChoice = useCallback((targetId: string) => {
-    console.log('Choice selected:', targetId);
-    setVideoEnded(false);
-    setCurrentNodeId(targetId);
+  const handleChoice = useCallback((choice: { targetId: string, handleId: string }) => {
+    console.log('Choice selected:', choice);
+    if (choice.targetId) {
+      setVideoEnded(false);
+      setCurrentNodeId(choice.targetId);
+    }
   }, []);
 
   // Gérer la fermeture
@@ -178,7 +223,12 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
 
       {/* Lecteur vidéo */}
       {videoUrl && (
-        <Box sx={{ width: '100%', maxWidth: '1280px', aspectRatio: '16/9' }}>
+        <Box sx={{ 
+          width: '100%', 
+          maxWidth: '1280px', 
+          aspectRatio: '16/9',
+          position: 'relative'  
+        }}>
           <video
             ref={videoRef}
             src={videoUrl}
@@ -186,16 +236,18 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
             controls
             style={{ width: '100%', height: '100%' }}
             onEnded={handleVideoEnd}
+            onPause={handleVideoPause}
+            onPlay={handleVideoPlay}
           />
         </Box>
       )}
 
       {/* Boutons de choix */}
-      {choices.length > 0 && (videoEnded || !videoUrl) && (
+      {choices.length > 0 && (videoEnded || !videoUrl || isPaused) && (
         <Box
           sx={{
-            position: 'absolute',
-            bottom: '15%',
+            position: 'fixed',  
+            bottom: '10%',
             left: 0,
             right: 0,
             display: 'flex',
@@ -203,33 +255,36 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
             flexWrap: 'wrap',
             justifyContent: 'center',
             padding: '0 32px',
-            zIndex: 10000
+            zIndex: 10001,  
+            pointerEvents: 'auto'  
           }}
         >
           {choices.map(choice => (
             <Button
               key={choice.id}
               variant="contained"
-              onClick={() => handleChoice(choice.targetId)}
+              onClick={() => handleChoice(choice)}
               sx={{
                 minWidth: '280px',
                 height: '64px',
                 fontSize: '1.2rem',
                 fontWeight: 500,
-                bgcolor: 'rgba(255, 255, 255, 0.15)',
+                bgcolor: 'rgba(0, 0, 0, 0.75)',  
                 backdropFilter: 'blur(8px)',
                 color: 'white',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
+                border: '2px solid rgba(255, 255, 255, 0.5)',  
                 borderRadius: '32px',
                 textTransform: 'none',
                 transition: 'all 0.3s ease',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',  
                 '&:hover': {
-                  bgcolor: 'rgba(255, 255, 255, 0.25)',
-                  border: '1px solid rgba(255, 255, 255, 0.5)',
-                  transform: 'scale(1.02)'
+                  bgcolor: 'rgba(0, 0, 0, 0.85)',
+                  border: '2px solid rgba(255, 255, 255, 0.8)',
+                  transform: 'scale(1.02)',
+                  boxShadow: '0 6px 16px rgba(0, 0, 0, 0.6)'
                 },
                 '&:active': {
-                  bgcolor: 'rgba(255, 255, 255, 0.3)',
+                  bgcolor: 'rgba(0, 0, 0, 0.95)',
                   transform: 'scale(0.98)'
                 }
               }}

@@ -32,6 +32,9 @@ interface VideoNodeProps {
     onChoiceSelect?: (id: string, choice: any) => void;
     isCurrentNode?: boolean;
     isPlaying?: boolean;
+    content?: {
+      choices?: any[];
+    };
   };
   selected?: boolean;
 }
@@ -91,7 +94,12 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
 
   const handleChoiceClick = useCallback((choice: any) => {
     if (data.onChoiceSelect) {
-      data.onChoiceSelect(id, choice);
+      const handleId = `button-handle-${choice.id}`;
+      data.onChoiceSelect(id, { 
+        choiceId: choice.id,
+        handleId,
+        text: choice.text
+      });
     }
   }, [data.onChoiceSelect, id]);
 
@@ -124,63 +132,63 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
     }
   }, [id, data, data.onDataChange]);
 
-  const handleAddChoice = useCallback(() => {
+  const handleAddChoice = useCallback((text: string) => {
     if (data.onDataChange) {
       const newChoice = {
-        id: `choice-${Math.random().toString(36).substr(2, 9)}`,
-        text: 'New Choice'
+        id: `choice-${Date.now()}`,
+        text
       };
       
+      const currentChoices = data.content?.choices || [];
+      const updatedChoices = [...currentChoices, newChoice];
+      
       data.onDataChange(id, {
-        choices: [...(data.choices || []), newChoice]
+        content: {
+          ...data.content,
+          choices: updatedChoices
+        }
       });
     }
-  }, [id, data.onDataChange, data.choices]);
+    setIsEditingChoice(false);
+  }, [id, data]);
+
+  const handleDeleteChoice = useCallback((choiceId: string) => {
+    if (data.onDataChange && data.content?.choices) {
+      const updatedChoices = data.content.choices.filter(c => c.id !== choiceId);
+      
+      data.onDataChange(id, {
+        content: {
+          ...data.content,
+          choices: updatedChoices
+        }
+      });
+    }
+  }, [id, data]);
 
   const handleEditChoice = useCallback((choice: { id: string; text: string }) => {
-    if (data.onDataChange && data.choices) {
-      const updatedChoices = data.choices.map(c => 
+    if (data.onDataChange && data.content?.choices) {
+      const updatedChoices = data.content.choices.map(c => 
         c.id === choice.id ? { ...c, text: choice.text } : c
       );
       
       data.onDataChange(id, {
-        choices: updatedChoices
+        content: {
+          ...data.content,
+          choices: updatedChoices
+        }
       });
     }
-  }, [id, data.onDataChange, data.choices]);
-
-  const handleDeleteChoice = useCallback((choiceId: string) => {
-    if (data.onDataChange && data.choices) {
-      const updatedChoices = data.choices.filter(c => c.id !== choiceId);
-      
-      data.onDataChange(id, {
-        choices: updatedChoices
-      });
-    }
-  }, [id, data.onDataChange, data.choices]);
-
-  useEffect(() => {
-    if (data.isPlaying && videoRef.current) {
-      videoRef.current.play().catch(error => {
-        console.error('Error playing video:', error);
-        setError('Failed to play video');
-      });
-      setIsPlaying(true);
-    } else if (!data.isPlaying && videoRef.current) {
-      videoRef.current.pause();
-      setIsPlaying(false);
-    }
-  }, [data.isPlaying]);
+  }, [id, data]);
 
   const renderChoiceButtons = () => {
-    if (!data.choices) return null;
+    if (!data.content?.choices) return null;
     
-    return data.choices.map((choice: any, index: number) => (
+    return data.content.choices.map((choice: any, index: number) => (
       <Box key={choice.id} sx={{ mb: 1, position: 'relative' }}>
         <Handle
           type="source"
           position={Position.Right}
-          id={`choice-${choice.id}`}
+          id={`button-handle-${choice.id}`}
           style={{
             top: '50%',
             transform: 'translateY(-50%)',
@@ -201,6 +209,27 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
             width: '100%', 
             mb: 1,
             position: 'relative',
+            minHeight: '40px',
+            fontSize: '1rem',
+            fontWeight: 500,
+            bgcolor: 'rgba(0, 0, 0, 0.75)',
+            color: 'white',
+            border: '2px solid rgba(255, 255, 255, 0.5)',
+            borderRadius: '20px',
+            backdropFilter: 'blur(8px)',
+            textTransform: 'none',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+            transition: 'all 0.2s ease',
+            '&:hover': {
+              bgcolor: 'rgba(0, 0, 0, 0.85)',
+              border: '2px solid rgba(255, 255, 255, 0.8)',
+              transform: 'translateY(-2px)',
+              boxShadow: '0 6px 16px rgba(0, 0, 0, 0.4)',
+            },
+            '&:active': {
+              transform: 'translateY(1px)',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+            },
             '&::after': {
               content: '""',
               position: 'absolute',
@@ -218,20 +247,39 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
     ));
   };
 
+  useEffect(() => {
+    if (data.isPlaying && videoRef.current) {
+      videoRef.current.play().catch(error => {
+        console.error('Error playing video:', error);
+        setError('Failed to play video');
+      });
+      setIsPlaying(true);
+    } else if (!data.isPlaying && videoRef.current) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    }
+  }, [data.isPlaying]);
+
   return (
     <div 
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{ position: 'relative' }}
     >
+      {/* Handle par défaut pour la connexion simple */}
       <Handle
         type="source"
         position={Position.Bottom}
-        style={{ background: '#555' }}
+        id="default-handle"
+        style={{ 
+          background: '#555',
+          visibility: data.content?.choices && data.content.choices.length > 0 ? 'hidden' : 'visible'
+        }}
       />
       <Handle
         type="target"
         position={Position.Top}
+        id="target-handle"
         style={{ background: '#555' }}
       />
       
@@ -326,7 +374,7 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
               )}
             </Box>
 
-            <Box sx={{ p: 2 }}>
+            <Box sx={{ p: 2, position: 'relative' }}>
               {!data.isPlaybackMode && (
                 <>
                   <Button
@@ -349,7 +397,11 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
                   </Button>
                 </>
               )}
-              {renderChoiceButtons()}
+              {/* Affichage des choix avec leurs handles */}
+              <Box sx={{ position: 'relative' }}>
+                {(data.isPlaybackMode && (!isPlaying || videoRef.current?.ended)) && renderChoiceButtons()}
+                {!data.isPlaybackMode && renderChoiceButtons()}
+              </Box>
             </Box>
           </Box>
         )}
@@ -380,7 +432,7 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
         <DialogTitle>Edit Choices</DialogTitle>
         <DialogContent>
           <Box sx={{ p: 2 }}>
-            {data.choices?.map((choice) => (
+            {data.content?.choices?.map((choice) => (
               <Box key={choice.id} sx={{ mb: 2, display: 'flex', gap: 1 }}>
                 <TextField
                   fullWidth
@@ -398,7 +450,7 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
             <Button
               variant="outlined"
               startIcon={<AddIcon />}
-              onClick={handleAddChoice}
+              onClick={() => handleAddChoice('New Choice')}
               sx={{ mt: 2 }}
               fullWidth
             >

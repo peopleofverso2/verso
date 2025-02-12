@@ -6,8 +6,14 @@ import { MediaFile } from '../types/media';
 interface PovFile {
   nodes: {
     id: string;
+    type: string;
     data: {
-      [key: string]: any;
+      mediaId: string;
+      content: {
+        choices: any[];
+        videoUrl: string;
+        video: any;
+      };
     };
   }[];
   edges: {
@@ -16,7 +22,7 @@ interface PovFile {
     target: string;
     sourceHandle: string;
     data: {
-      [key: string]: any;
+      label: string;
     };
   }[];
   media: Record<string, MediaFile>;
@@ -85,26 +91,24 @@ export class PovExportService {
     const povFile = {
       nodes: nodes.map(node => ({
         id: node.id,
+        type: node.type,
         data: {
-          ...node.data,
-          // Nettoyer les propriétés spécifiques à React Flow
-          onDataChange: undefined,
-          onVideoEnd: undefined,
-          onChoiceSelect: undefined,
-          getConnectedNodeId: undefined,
-          isPlaybackMode: undefined,
-          isCurrentNode: undefined,
-          isPlaying: undefined
+          mediaId: node.data?.mediaId,
+          content: {
+            choices: node.data?.content?.choices || [],
+            videoUrl: node.data?.content?.videoUrl,
+            video: node.data?.content?.video
+          }
         }
       })),
       edges: edges.map(edge => ({
         id: edge.id,
         source: edge.source,
         target: edge.target,
-        sourceHandle: edge.sourceHandle,
-        data: edge.data,
-        // Nettoyer les propriétés spécifiques à React Flow
-        selected: undefined
+        sourceHandle: edge.sourceHandle || '',
+        data: {
+          label: edge.data?.label
+        }
       })),
       media
     };
