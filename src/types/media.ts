@@ -1,10 +1,10 @@
 export interface MediaMetadata {
   id: string;
   name: string;
-  type: 'video' | 'image';
+  type: 'video' | 'image' | 'audio' | 'pov';
   mimeType: string;
   size: number;
-  duration?: number; // Pour les vidéos
+  duration?: number; // Pour les vidéos et l'audio
   dimensions?: {
     width: number;
     height: number;
@@ -30,7 +30,7 @@ export interface MediaStorageAdapter {
 }
 
 export interface MediaFilter {
-  type?: 'video' | 'image';
+  type?: 'video' | 'image' | 'audio' | 'pov';
   tags?: string[];
   search?: string;
 }

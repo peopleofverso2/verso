@@ -21,6 +21,7 @@ import StopIcon from '@mui/icons-material/Stop';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import DownloadIcon from '@mui/icons-material/Download';
 import VideoNode2 from './nodes/VideoNode2';
+import MediaNode from './nodes/MediaNode';
 import ChoiceEdge from './edges/ChoiceEdge';
 import { ProjectService } from '../../services/projectService';
 import { PovExportService } from '../../services/PovExportService';
@@ -35,6 +36,7 @@ import { layoutNodes } from '../../utils/layout';
 
 const nodeTypes: NodeTypes = {
   videoNode2: VideoNode2,
+  mediaNode: MediaNode,
 };
 
 const edgeTypes: EdgeTypes = {
@@ -333,11 +335,23 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
         type,
         position,
         data: { 
-          label: `${type} node`,
+          label: type === 'mediaNode' ? 'Media Node' : `${type} node`,
           onDataChange: handleNodeDataChange,
+          onVideoEnd,
+          onChoiceSelect: handleChoiceSelect,
           mediaId: undefined,
+          content: {
+            choices: [],
+            timer: {
+              duration: 0,
+              autoTransition: false,
+              loop: false
+            }
+          },
           isPlaybackMode: false,
-          getConnectedNodeId: (buttonId: string) => getConnectedNodeId(getId(), buttonId),
+          isCurrentNode: false,
+          isPlaying: false,
+          getConnectedNodeId: (buttonId: string) => getConnectedNodeId(nodeId, buttonId),
         },
       };
 
