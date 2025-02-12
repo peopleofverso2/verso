@@ -72,6 +72,7 @@ interface SidebarProps {
   isPlaybackMode: boolean;
   onStartPlayback: () => void;
   onStopPlayback: () => void;
+  children?: React.ReactNode;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -81,6 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   isPlaybackMode,
   onStartPlayback,
   onStopPlayback,
+  children,
 }) => {
   const onDragStart = (event: DragEvent, nodeType: string) => {
     event.dataTransfer.setData('application/reactflow', nodeType);
@@ -181,6 +183,9 @@ const Sidebar: React.FC<SidebarProps> = ({
           </Box>
         </Box>
       </Box>
+
+      {/* Contenu personnalisé */}
+      {children}
 
       <Box sx={{ mt: 'auto' }}>
         <Typography 

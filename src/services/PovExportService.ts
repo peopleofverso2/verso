@@ -117,4 +117,120 @@ export class PovExportService {
 
     return povFile;
   }
+
+  public async exportToPovFile(title: string, nodes: Node[], edges: Edge[]): Promise<Blob> {
+    const povData = await this.exportScenario(title, nodes, edges);
+    return new Blob([JSON.stringify(povData)], { type: 'application/json' });
+  }
+
+  private validatePovFile(data: any): data is PovFile {
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid POV file format: root must be an object');
+    }
+
+    // Valider les nodes
+    if (!Array.isArray(data.nodes)) {
+      throw new Error('Invalid POV file format: nodes must be an array');
+    }
+
+    for (const node of data.nodes) {
+      if (!node.id || !node.type || !node.data) {
+        throw new Error('Invalid POV file format: each node must have id, type, and data');
+      }
+    }
+
+    // Valider les edges
+    if (!Array.isArray(data.edges)) {
+      throw new Error('Invalid POV file format: edges must be an array');
+    }
+
+    for (const edge of data.edges) {
+      if (!edge.id || !edge.source || !edge.target) {
+        throw new Error('Invalid POV file format: each edge must have id, source, and target');
+      }
+    }
+
+    // Valider les médias
+    if (!data.media || typeof data.media !== 'object') {
+      throw new Error('Invalid POV file format: media must be an object');
+    }
+
+    for (const [mediaId, mediaFile] of Object.entries(data.media)) {
+      if (!mediaFile || !mediaFile.metadata || !mediaFile.url) {
+        throw new Error(`Invalid POV file format: invalid media format for ID ${mediaId}`);
+      }
+    }
+
+    return true;
+  }
+
+  public async importFromPovFile(file: File): Promise<{
+    nodes: Node[];
+    edges: Edge[];
+    media: Record<string, MediaFile>;
+  }> {
+    await this.initialize();
+
+    if (!this.mediaLibrary) {
+      throw new Error('MediaLibrary not initialized');
+    }
+
+    if (!file.name.endsWith('.pov')) {
+      throw new Error('Invalid file type: must be a .pov file');
+    }
+
+    try {
+      const content = await file.text();
+      const povData = JSON.parse(content);
+
+      // Valider le format du fichier POV
+      if (!this.validatePovFile(povData)) {
+        throw new Error('Invalid POV file format');
+      }
+
+      console.log('Importing POV file:', povData);
+
+      // Importer les médias dans la bibliothèque locale
+      for (const [mediaId, mediaFile] of Object.entries(povData.media)) {
+        try {
+          await this.mediaLibrary.importMedia(mediaFile);
+          console.log(`Media ${mediaId} imported successfully`);
+        } catch (error) {
+          console.error(`Error importing media ${mediaId}:`, error);
+          throw new Error(`Failed to import media ${mediaId}`);
+        }
+      }
+
+      // Convertir les nœuds POV en nœuds ReactFlow
+      const nodes: Node[] = povData.nodes.map(node => ({
+        id: node.id,
+        type: node.type,
+        position: { x: 0, y: 0 }, // Position par défaut, à ajuster par l'éditeur
+        data: {
+          mediaId: node.data.mediaId,
+          content: node.data.content
+        }
+      }));
+
+      // Convertir les edges POV en edges ReactFlow
+      const edges: Edge[] = povData.edges.map(edge => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle || undefined,
+        data: edge.data
+      }));
+
+      console.log('POV file imported successfully:', { nodes, edges });
+
+      return {
+        nodes,
+        edges,
+        media: povData.media
+      };
+    } catch (error) {
+      console.error('Error importing POV file:', error);
+      throw error instanceof Error ? error : new Error('Failed to import POV file');
+    }
+  }
 }

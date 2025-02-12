@@ -15,19 +15,23 @@ import ReactFlow, {
   applyEdgeChanges,
   ReactFlowProvider,
 } from 'reactflow';
-import { Box, Button } from '@mui/material';
+import { Box, Button, IconButton, Tooltip } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import StopIcon from '@mui/icons-material/Stop';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import DownloadIcon from '@mui/icons-material/Download';
 import VideoNode2 from './nodes/VideoNode2';
 import ChoiceEdge from './edges/ChoiceEdge';
 import { ProjectService } from '../../services/projectService';
+import { PovExportService } from '../../services/PovExportService';
 import { Project } from '../../types/project';
 import Sidebar from './controls/Sidebar';
 import PovPlayer from '../Player/PovPlayer';
-import { PovExportService } from '../../services/PovExportService';
+import { MediaLibraryService } from '../../services/MediaLibraryService';
 import 'reactflow/dist/style.css';
 import debounce from 'lodash.debounce';
-import { MediaLibraryService } from '../../services/MediaLibraryService';
 import { Snackbar } from '@mui/material';
+import { layoutNodes } from '../../utils/layout';
 
 const nodeTypes: NodeTypes = {
   videoNode2: VideoNode2,
@@ -360,6 +364,82 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
     }
   }, [project, nodes, edges]);
 
+  const handleExportPov = useCallback(async () => {
+    try {
+      // Optimiser le placement des nœuds avant l'export
+      const optimizedNodes = layoutNodes(nodes, edges);
+      
+      const povService = PovExportService.getInstance();
+      const scenarioName = project?.name || 'scenario';
+      const povBlob = await povService.exportToPovFile(scenarioName, optimizedNodes, edges);
+      const povFile = new File([povBlob], `${scenarioName}.pov`, { type: 'application/json' });
+      
+      // Créer un lien de téléchargement
+      const url = URL.createObjectURL(povFile);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = povFile.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      // Mettre à jour la vue avec le nouveau placement
+      setNodes(optimizedNodes);
+
+      setSnackbar({
+        open: true,
+        message: 'Scénario exporté avec succès',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error exporting POV:', error);
+      setSnackbar({
+        open: true,
+        message: 'Erreur lors de l\'export du scénario',
+        severity: 'error'
+      });
+    }
+  }, [project, nodes, edges, setNodes]);
+
+  const handleImportPov = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setSnackbar({
+        open: true,
+        message: 'Import en cours...',
+        severity: 'info'
+      });
+
+      const povService = PovExportService.getInstance();
+      const { nodes: importedNodes, edges: importedEdges } = await povService.importFromPovFile(file);
+      
+      // Optimiser le placement des nœuds
+      const nodesWithLayout = layoutNodes(importedNodes, importedEdges);
+      
+      setNodes(nodesWithLayout);
+      setEdges(importedEdges);
+
+      setSnackbar({
+        open: true,
+        message: 'Scénario importé avec succès',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error importing POV:', error);
+      setSnackbar({
+        open: true,
+        message: error instanceof Error ? error.message : 'Erreur lors de l\'import du scénario',
+        severity: 'error'
+      });
+    }
+
+    // Reset input
+    event.target.value = '';
+  }, [setNodes, setEdges]);
+
   // Charger le projet au démarrage
   useEffect(() => {
     let isSubscribed = true;
@@ -480,9 +560,36 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
           isSaving={isSaving}
           onBackToLibrary={onBackToLibrary}
           isPlaybackMode={isPlaybackMode}
-          onStartPlayback={startPlayback}
-          onStopPlayback={stopPlayback}
-        />
+          onStartPlayback={() => setIsPlaybackMode(true)}
+          onStopPlayback={() => setIsPlaybackMode(false)}
+        >
+          <Box sx={{ display: 'flex', gap: 1, p: 1 }}>
+            {/* Boutons Export/Import POV */}
+            <Tooltip title="Export POV">
+              <IconButton
+                onClick={handleExportPov}
+                size="small"
+              >
+                <DownloadIcon />
+              </IconButton>
+            </Tooltip>
+            
+            <Tooltip title="Import POV">
+              <IconButton
+                component="label"
+                size="small"
+              >
+                <UploadFileIcon />
+                <input
+                  type="file"
+                  accept=".pov"
+                  hidden
+                  onChange={handleImportPov}
+                />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Sidebar>
 
         {/* Lecteur POV */}
         {showPovPlayer && povScenario && (

@@ -222,34 +222,41 @@ export class ProjectService {
 
   async getProjectList(): Promise<ProjectMetadata[]> {
     await this.initialize();
-    
+
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
     try {
       console.log('Getting project list');
-      const db = await this.getDB();
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction(STORE_NAME, 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.getAll();
+      const tx = this.db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.getAll();
 
-        request.onsuccess = () => {
-          const projects = request.result || [];
-          console.log('Raw projects:', projects);
-          const metadata = projects.map(project => ({
-            projectId: project.projectId,
-            scenarioTitle: project.scenario.scenarioTitle,
-            description: project.scenario.description,
-            createdAt: project.createdAt,
-            updatedAt: project.updatedAt
-          }));
-          console.log('Project metadata:', metadata);
-          resolve(metadata);
-        };
-
+      const projects = await new Promise<any[]>((resolve, reject) => {
         request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
       });
+
+      console.log('Raw projects:', projects);
+      
+      // Convertir en ProjectMetadata
+      const projectMetadata = projects.map(project => ({
+        projectId: project.projectId,
+        scenario: {
+          scenarioTitle: project.scenario?.scenarioTitle || 'Sans titre',
+          description: project.scenario?.description || ''
+        },
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt
+      }));
+
+      console.log('Project metadata with full structure:', projectMetadata);
+
+      return projectMetadata;
     } catch (error) {
-      console.error('Error listing projects:', error);
-      return [];
+      console.error('Error getting project list:', error);
+      throw error;
     }
   }
 
@@ -335,5 +342,91 @@ export class ProjectService {
         }
       };
     });
+  }
+
+  private getFromStore(store: IDBObjectStore, key: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const request = store.get(key);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+  }
+
+  private putInStore(store: IDBObjectStore, value: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const request = store.put(value);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+    });
+  }
+
+  public async updateProjectMetadata(project: ProjectMetadata): Promise<void> {
+    console.log('ProjectService: updating metadata for project:', {
+      projectId: project.projectId,
+      scenario: JSON.stringify(project.scenario, null, 2)
+    });
+    
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    if (!project.projectId) {
+      throw new Error('Project ID is required for update');
+    }
+
+    try {
+      const tx = this.db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+
+      // Récupérer le projet existant avec une promesse
+      const existingProject = await this.getFromStore(store, project.projectId);
+      
+      if (!existingProject) {
+        throw new Error(`Project not found: ${project.projectId}`);
+      }
+
+      console.log('Existing project structure:', {
+        projectId: existingProject.projectId,
+        scenario: JSON.stringify(existingProject.scenario, null, 2),
+        nodes: existingProject.nodes?.length,
+        edges: existingProject.edges?.length,
+        createdAt: existingProject.createdAt,
+        updatedAt: existingProject.updatedAt
+      });
+
+      // S'assurer que le scenario existe
+      if (!existingProject.scenario) {
+        existingProject.scenario = {};
+      }
+
+      // Mettre à jour uniquement les métadonnées tout en préservant le reste
+      const updatedProject = {
+        ...existingProject,
+        scenario: {
+          ...existingProject.scenario,
+          scenarioTitle: project.scenario?.scenarioTitle || existingProject.scenario?.scenarioTitle || 'Sans titre',
+          description: project.scenario?.description || existingProject.scenario?.description || ''
+        },
+        updatedAt: new Date().toISOString()
+      };
+
+      console.log('Updated project structure:', {
+        projectId: updatedProject.projectId,
+        scenario: JSON.stringify(updatedProject.scenario, null, 2),
+        nodes: updatedProject.nodes?.length,
+        edges: updatedProject.edges?.length,
+        createdAt: updatedProject.createdAt,
+        updatedAt: updatedProject.updatedAt
+      });
+
+      // Sauvegarder le projet mis à jour avec une promesse
+      await this.putInStore(store, updatedProject);
+      await tx.done;
+
+      console.log('Project metadata updated successfully');
+    } catch (error) {
+      console.error('Error updating project metadata:', error);
+      throw error;
+    }
   }
 }

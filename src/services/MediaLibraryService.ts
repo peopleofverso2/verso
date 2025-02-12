@@ -171,4 +171,26 @@ export class MediaLibraryService {
       return false;
     }
   }
+
+  async importMedia(mediaFile: MediaFile): Promise<MediaFile> {
+    // Vérifier si le média existe déjà
+    try {
+      const existingMedia = await this.getMedia(mediaFile.id);
+      if (existingMedia) {
+        return existingMedia;
+      }
+    } catch (error) {
+      // Le média n'existe pas, on continue l'import
+    }
+
+    // Créer un blob à partir de l'URL du média
+    const response = await fetch(mediaFile.url);
+    const blob = await response.blob();
+    const file = new File([blob], mediaFile.metadata.name, { type: mediaFile.metadata.mimeType });
+
+    // Importer le média avec ses métadonnées
+    const importedMedia = await this.storageAdapter.saveMedia(file, mediaFile.metadata);
+    
+    return importedMedia;
+  }
 }
