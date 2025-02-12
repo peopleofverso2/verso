@@ -60,6 +60,7 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
   const [showPovPlayer, setShowPovPlayer] = useState(false);
   const [povScenario, setPovScenario] = useState<any>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const [exporting, setExporting] = useState(false);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
   const projectService = ProjectService.getInstance();
@@ -366,41 +367,53 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
 
   const handleExportPov = useCallback(async () => {
     try {
-      // Optimiser le placement des nœuds avant l'export
-      const optimizedNodes = layoutNodes(nodes, edges);
+      setExporting(true);
+      const projectService = await ProjectService.getInstance();
+      const project = await projectService.getProject(projectId);
       
-      const povService = PovExportService.getInstance();
-      const scenarioName = project?.name || 'scenario';
-      const povBlob = await povService.exportToPovFile(scenarioName, optimizedNodes, edges);
-      const povFile = new File([povBlob], `${scenarioName}.pov`, { type: 'application/json' });
+      if (!project) {
+        throw new Error('Project not found');
+      }
+
+      const povService = new PovExportService();
+      const blob = await povService.exportToPovFile(project);
       
-      // Créer un lien de téléchargement
-      const url = URL.createObjectURL(povFile);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = povFile.name;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Créer le nom du fichier avec le titre du projet
+      const title = project.scenario?.scenarioTitle || 'sans-titre';
+      const safeTitle = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+      const date = new Date().toISOString().split('T')[0];
+      const filename = `${safeTitle}_${date}.pov`;
+
+      // Télécharger le fichier
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      // Mettre à jour la vue avec le nouveau placement
-      setNodes(optimizedNodes);
-
+      setExporting(false);
       setSnackbar({
         open: true,
-        message: 'Scénario exporté avec succès',
+        message: 'Export POV réussi',
         severity: 'success'
       });
     } catch (error) {
       console.error('Error exporting POV:', error);
+      setExporting(false);
       setSnackbar({
         open: true,
-        message: 'Erreur lors de l\'export du scénario',
+        message: 'Erreur lors de l\'export POV',
         severity: 'error'
       });
     }
-  }, [project, nodes, edges, setNodes]);
+  }, [projectId]);
 
   const handleImportPov = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
