@@ -118,8 +118,17 @@ export class PovExportService {
     return povFile;
   }
 
-  public async exportToPovFile(title: string, nodes: Node[], edges: Edge[]): Promise<Blob> {
-    const povData = await this.exportScenario(title, nodes, edges);
+  public async exportToPovFile(project: any): Promise<Blob> {
+    const title = project.scenario?.scenarioTitle || 'sans-titre';
+    const safeTitle = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-') // Remplacer les caractères non alphanumériques par des tirets
+      .replace(/-+/g, '-') // Remplacer les tirets multiples par un seul
+      .replace(/^-|-$/g, ''); // Supprimer les tirets au début et à la fin
+
+    const povData = await this.exportScenario(title, project.nodes, project.edges);
+    const date = new Date().toISOString().split('T')[0];
+    const filename = `${safeTitle}_${date}.pov`;
     return new Blob([JSON.stringify(povData)], { type: 'application/json' });
   }
 
