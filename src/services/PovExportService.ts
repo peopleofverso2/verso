@@ -56,19 +56,55 @@ export class PovExportService {
     return PovExportService.instance;
   }
 
-  public async exportScenario(title: string, nodes: Node[], edges: Edge[]): Promise<PovFile> {
+  public async exportScenario(
+    title: string,
+    nodes: Node[],
+    edges: Edge[]
+  ): Promise<PovFile> {
     await this.initialize();
-    
-    if (!this.mediaLibrary) {
-      throw new Error('MediaLibrary not initialized');
-    }
 
-    console.log('Exporting scenario:', { title, nodes, edges });
+    console.log('Exporting scenario:', { title, nodesCount: nodes.length, edgesCount: edges.length });
 
+    // Collecter les médias des nœuds
     const media = await this.collectMediaFromNodes(nodes);
-    const povFile = await this.createPovFile(nodes, edges, media);
 
-    console.log('POV file created:', povFile);
+    // Transformer les nœuds pour le format POV
+    const povNodes = nodes.map(node => ({
+      id: node.id,
+      type: node.type || 'default',
+      data: {
+        mediaId: node.data?.mediaId || '',
+        content: {
+          choices: node.data?.content?.choices || [],
+          videoUrl: node.data?.content?.videoUrl || '',
+          video: node.data?.content?.video || null
+        }
+      }
+    }));
+
+    // Transformer les arêtes pour le format POV
+    const povEdges = edges.map(edge => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: edge.sourceHandle || '',
+      data: {
+        label: edge.data?.label || ''
+      }
+    }));
+
+    // Créer le fichier POV
+    const povFile: PovFile = {
+      nodes: povNodes,
+      edges: povEdges,
+      media
+    };
+
+    console.log('POV file created:', {
+      nodesCount: povFile.nodes.length,
+      edgesCount: povFile.edges.length,
+      mediaCount: Object.keys(povFile.media).length
+    });
 
     return povFile;
   }

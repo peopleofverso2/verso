@@ -311,21 +311,31 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
       // Créer une instance de PovExportService
       const povExportService = PovExportService.getInstance();
       
+      // S'assurer que les nœuds et les arêtes existent
+      const nodes = fullProject.nodes || [];
+      const edges = fullProject.edges || [];
+      
+      console.log('Exporting scenario with:', { 
+        title: fullProject.scenario?.scenarioTitle,
+        nodesCount: nodes.length,
+        edgesCount: edges.length
+      });
+
       // Exporter le scénario
       const povFile = await povExportService.exportScenario(
         fullProject.scenario?.scenarioTitle || 'Sans titre',
-        fullProject.nodes || [],
-        fullProject.edges || []
+        nodes,
+        edges
       );
 
-      // Convertir le povFile en format attendu par PovPlayer
-      const scenario = {
-        nodes: povFile.nodes || [],
-        edges: povFile.edges || [],
-        media: povFile.media || {}
-      };
+      console.log('POV file created:', povFile);
 
-      setPovFile(scenario);
+      // Vérifier que le povFile a la bonne structure
+      if (!povFile || !povFile.nodes || !Array.isArray(povFile.nodes)) {
+        throw new Error('Format de scénario invalide');
+      }
+
+      setPovFile(povFile);
       setShowPovPlayer(true);
     } catch (error) {
       console.error('Error playing scenario:', error);
@@ -428,7 +438,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
       {/* Lecteur POV */}
       {showPovPlayer && povFile && (
         <PovPlayer
-          povFile={povFile}
+          scenario={povFile}
           onClose={() => {
             setShowPovPlayer(false);
             setPovFile(null);
