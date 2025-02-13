@@ -10,386 +10,346 @@ import {
   DialogActions,
   TextField,
   Alert,
-  Tooltip,
   IconButton,
   Card,
   CardContent,
+  CardMedia,
   CardActions,
-  CircularProgress
+  Grid,
+  Skeleton,
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
   Add as AddIcon,
   Edit as EditIcon,
-  Save as SaveIcon,
-  CloudDownload as CloudDownloadIcon,
-  GetApp as GetAppIcon,
-  OpenInNew as OpenInNewIcon,
   PlayArrow as PlayArrowIcon,
   Image as ImageIcon,
 } from '@mui/icons-material';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
-import { ProjectService } from '../../services/projectService';
 import { ProjectMetadata } from '../../types/project';
-import ProjectList from '../ProjectList/ProjectList';
+import { useProjectManager } from '../../hooks/useProjectManager';
+import { MediaLibraryService } from '../../services/mediaLibraryService';
+import { ProjectService } from '../../services/projectService';
 import { PovExportService } from '../../services/povExportService';
 import PovPlayer from '../Player/PovPlayer';
-import { MediaLibraryService } from '../../services/mediaLibraryService';
 
 interface ProjectLibraryProps {
   onProjectSelect: (projectId: string) => void;
-  onProjectDelete: (projectId: string) => void;
+  onProjectDelete?: (projectId: string) => void;
 }
 
-interface ProjectMetadataDialogProps {
-  open: boolean;
-  project: ProjectMetadata;
-  onClose: () => void;
-  onSave: (updatedProject: ProjectMetadata) => void;
-}
+const ProjectCard: React.FC<{ 
+  project: ProjectMetadata; 
+  onSelect: () => void;
+  onDelete?: () => void;
+  onPlay: () => void;
+  onImageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+}> = ({ project, onSelect, onDelete, onPlay, onImageChange }) => {
+  const [coverUrl, setCoverUrl] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const mediaLibraryRef = useRef<MediaLibraryService | null>(null);
 
-const ProjectMetadataDialog: React.FC<ProjectMetadataDialogProps> = ({
-  open,
-  project,
-  onClose,
-  onSave
-}) => {
-  const [title, setTitle] = useState(project.scenario?.scenarioTitle || '');
-  const [description, setDescription] = useState(project.scenario?.description || '');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSave = async () => {
-    try {
-      setSaving(true);
-      setError(null);
-      
-      const updatedProject = {
-        ...project,
-        scenario: {
-          ...project.scenario,
-          scenarioTitle: title,
-          description: description
+  useEffect(() => {
+    const loadCoverImage = async () => {
+      setLoading(true);
+      try {
+        if (!mediaLibraryRef.current) {
+          mediaLibraryRef.current = await MediaLibraryService.getInstance();
         }
-      };
-      
-      await onSave(updatedProject);
-      onClose();
-    } catch (err) {
-      console.error('Error saving metadata:', err);
-      setError(err instanceof Error ? err.message : 'Erreur lors de la sauvegarde');
-    } finally {
-      setSaving(false);
-    }
-  };
+
+        if (project?.scenario?.coverImageId) {
+          console.log('Loading cover image:', project.scenario.coverImageId);
+          const media = await mediaLibraryRef.current.getMedia(project.scenario.coverImageId);
+          if (media) {
+            console.log('Cover image loaded:', media);
+            setCoverUrl(media.url);
+          }
+        } else {
+          setCoverUrl('');
+        }
+      } catch (error) {
+        console.error('Error loading cover image:', error);
+        setCoverUrl('');
+      }
+      setLoading(false);
+    };
+
+    loadCoverImage();
+  }, [project?.scenario?.coverImageId]);
 
   return (
-    <Dialog open={open} onClose={onClose}>
-      <DialogTitle>Modifier les métadonnées</DialogTitle>
-      <DialogContent>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
+    <Card sx={{ 
+      height: '100%', 
+      display: 'flex', 
+      flexDirection: 'column',
+      position: 'relative'
+    }}>
+      {loading ? (
+        <Skeleton 
+          variant="rectangular" 
+          width="100%" 
+          height={200}
+          animation="wave"
+        />
+      ) : (
+        coverUrl ? (
+          <CardMedia
+            component="img"
+            height={200}
+            image={coverUrl}
+            alt={project.scenario?.scenarioTitle || 'Cover image'}
+            sx={{ objectFit: 'cover' }}
+          />
+        ) : (
+          <Box
+            sx={{
+              height: 200,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: 'grey.100'
+            }}
+          >
+            <ImageIcon sx={{ fontSize: 60, color: 'grey.400' }} />
+          </Box>
+        )
+      )}
+
+      <CardContent sx={{ flexGrow: 1 }}>
+        <Typography variant="h6" component="h2" gutterBottom noWrap>
+          {project.scenario?.scenarioTitle || 'Sans titre'}
+        </Typography>
+        {project.scenario?.description && (
+          <Typography variant="body2" color="text.secondary" sx={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+          }}>
+            {project.scenario.description}
+          </Typography>
         )}
-        <TextField
-          autoFocus
-          margin="dense"
-          label="Titre"
-          type="text"
-          fullWidth
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          disabled={saving}
-        />
-        <TextField
-          margin="dense"
-          label="Description"
-          type="text"
-          fullWidth
-          multiline
-          rows={4}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          disabled={saving}
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={saving}>
-          Annuler
-        </Button>
-        <Button 
-          onClick={handleSave} 
-          variant="contained" 
+      </CardContent>
+
+      <CardActions sx={{ justifyContent: 'flex-end', p: 1 }}>
+        <IconButton 
+          size="small" 
+          component="label"
           color="primary"
-          disabled={saving}
+          title="Changer l'image"
         >
-          {saving ? 'Enregistrement...' : 'Enregistrer'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+          <input
+            type="file"
+            hidden
+            accept="image/*"
+            onChange={onImageChange}
+          />
+          <ImageIcon />
+        </IconButton>
+        <IconButton 
+          size="small" 
+          onClick={onSelect}
+          color="primary"
+          title="Éditer"
+        >
+          <EditIcon />
+        </IconButton>
+        <IconButton 
+          size="small" 
+          onClick={onPlay}
+          color="primary"
+          title="Lancer"
+        >
+          <PlayArrowIcon />
+        </IconButton>
+        {onDelete && (
+          <IconButton 
+            size="small" 
+            onClick={onDelete}
+            color="error"
+            title="Supprimer"
+          >
+            <DeleteIcon />
+          </IconButton>
+        )}
+      </CardActions>
+    </Card>
   );
 };
 
-const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProjectDelete }) => {
-  const [projects, setProjects] = useState<ProjectMetadata[]>([]);
-  const [loading, setLoading] = useState(true);
+const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
+  onProjectSelect,
+  onProjectDelete
+}) => {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newProjectTitle, setNewProjectTitle] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
-  const [editingProject, setEditingProject] = useState<ProjectMetadata | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [showPovPlayer, setShowPovPlayer] = useState(false);
   const [povFile, setPovFile] = useState<any>(null);
+  const [uiError, setUiError] = useState<string | null>(null);
+  const [projectsList, setProjectsList] = useState<ProjectMetadata[]>([]);
+
+  const {
+    projects,
+    loading,
+    error,
+    createProject,
+    updateProjectMetadata
+  } = useProjectManager();
+
+  // Synchroniser les projets avec le state local
+  useEffect(() => {
+    setProjectsList(projects);
+  }, [projects]);
 
   const projectService = useRef(ProjectService.getInstance());
-  const povExportService = useRef(PovExportService.getInstance());
-
-  const [mediaLibrary, setMediaLibrary] = useState<MediaLibraryService | null>(null);
-
-  useEffect(() => {
-    MediaLibraryService.getInstance().then(setMediaLibrary);
-  }, []);
-
-  const getMediaUrl = useCallback(async (mediaId: string) => {
-    if (!mediaLibrary) return '';
-    try {
-      const media = await mediaLibrary.getMedia(mediaId);
-      return media.url;
-    } catch (error) {
-      console.error('Error getting media URL:', error);
-      return '';
-    }
-  }, [mediaLibrary]);
-
-  const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    projects.forEach(async (project) => {
-      if (project.scenario?.coverImage && !mediaUrls[project.scenario.coverImage]) {
-        const url = await getMediaUrl(project.scenario.coverImage);
-        setMediaUrls(prev => ({
-          ...prev,
-          [project.scenario.coverImage]: url
-        }));
-      }
-    });
-  }, [projects, getMediaUrl]);
-
-  const loadProjects = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      console.log('Loading projects...');
-      const projects = await projectService.current.getProjectList();
-      console.log('Projects loaded:', projects);
-      setProjects(projects);
-    } catch (error) {
-      console.error('Error loading projects:', error);
-      setError('Erreur lors du chargement des projets');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadProjects();
-  }, []);
+  const mediaLibraryRef = useRef<MediaLibraryService | null>(null);
 
   const handleCreateProject = async () => {
-    if (!newProjectTitle.trim()) {
-      setError('Le titre est requis');
-      return;
-    }
-
     try {
-      console.log('Creating project with title:', newProjectTitle);
-      const projectId = await projectService.current.createProject(
-        newProjectTitle,
-        newProjectDescription
-      );
-      console.log('Project created with ID:', projectId);
-      
+      const projectId = await createProject(newProjectTitle, newProjectDescription);
       setCreateDialogOpen(false);
       setNewProjectTitle('');
       setNewProjectDescription('');
-      
-      console.log('Reloading projects...');
-      await loadProjects();
-      
-      console.log('Selecting new project...');
       onProjectSelect(projectId);
     } catch (error) {
       console.error('Error creating project:', error);
-      setError('Erreur lors de la création du projet');
     }
   };
 
-  const handleDeleteProject = async (projectId: string) => {
+  const handleUpdateCoverImage = async (projectId: string, file: File) => {
     try {
-      await projectService.current.deleteProject(projectId);
-      await loadProjects();
-    } catch (error) {
-      console.error('Error deleting project:', error);
-      setError('Erreur lors de la suppression du projet');
-    }
-  };
-
-  const handleUpdateMetadata = async (updatedProject: ProjectMetadata) => {
-    try {
-      console.log('Updating project metadata:', updatedProject);
+      console.log('Updating cover image for project:', projectId, file);
+      setUiError(null);
       
-      // Créer la structure correcte du projet pour la mise à jour
-      const projectToUpdate = {
-        projectId: updatedProject.projectId,
-        scenario: {
-          scenarioTitle: updatedProject.scenario?.scenarioTitle,
-          description: updatedProject.scenario?.description
-        }
-      };
-      
-      console.log('Sending update with structure:', projectToUpdate);
-      await projectService.current.updateProjectMetadata(projectToUpdate);
-      console.log('Metadata updated, reloading projects...');
-      await loadProjects();
-    } catch (error) {
-      console.error('Error updating project metadata:', error);
-      setError('Erreur lors de la mise à jour des métadonnées');
-    }
-  };
-
-  const handleUpdateCoverImage = async (project: ProjectMetadata, file: File) => {
-    try {
-      setError(null);
-      
-      if (!mediaLibrary) {
-        throw new Error('MediaLibraryService not initialized');
+      if (!mediaLibraryRef.current) {
+        mediaLibraryRef.current = await MediaLibraryService.getInstance();
       }
 
       // Vérifier le type et la taille du fichier
       if (!file.type.startsWith('image/')) {
-        setError('Le fichier doit être une image');
-        return;
+        throw new Error('Le fichier doit être une image');
       }
-      
+
       if (file.size > 5 * 1024 * 1024) { // 5MB max
-        setError('L\'image ne doit pas dépasser 5MB');
-        return;
+        throw new Error('L\'image ne doit pas dépasser 5MB');
       }
 
       // Créer les métadonnées du média
-      const mediaMetadata: MediaMetadata = {
-        id: `project-cover-${project.projectId}`,
-        type: 'image',
+      const mediaMetadata = {
+        type: 'image' as const,
         mimeType: file.type,
         name: file.name,
         size: file.size,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        tags: ['project-cover']
+        tags: ['cover'],
       };
 
-      // Stocker l'image via MediaLibraryService
-      const mediaFile = await mediaLibrary.uploadMedia(file, mediaMetadata);
+      console.log('Uploading media with metadata:', mediaMetadata);
       
-      // Mettre à jour les métadonnées du projet
-      const updatedProject = {
-        ...project,
+      // Stocker l'image via MediaLibraryService
+      const mediaFile = await mediaLibraryRef.current.uploadMedia(file, mediaMetadata);
+      console.log('Media uploaded:', mediaFile);
+
+      // Charger le projet existant pour préserver toutes les données
+      const currentProject = await projectService.current.loadProject(projectId);
+      if (!currentProject) {
+        throw new Error('Projet non trouvé');
+      }
+
+      // Créer une copie complète du projet avec les nouvelles métadonnées
+      const updatedMetadata: Partial<ProjectMetadata> = {
+        ...currentProject,
         scenario: {
-          ...project.scenario,
-          coverImage: mediaFile.id
+          ...currentProject.scenario,
+          coverImageId: mediaFile.metadata.id,
+          // Préserver les autres données du scénario si elles existent
+          title: currentProject.scenario?.title || '',
+          description: currentProject.scenario?.description || '',
+          thumbnails: currentProject.scenario?.thumbnails || [],
+          // Si d'autres champs existent dans le scénario, ils seront préservés par le spread operator
         }
       };
-      
-      await projectService.current.updateProjectMetadata(updatedProject);
-      await loadProjects();
+
+      console.log('Updating project metadata:', updatedMetadata);
+      await updateProjectMetadata(projectId, updatedMetadata);
+      console.log('Project metadata updated successfully');
+
+      // Forcer le rechargement de l'image
+      const project = await projectService.current.loadProject(projectId);
+      if (project) {
+        const updatedProjects = projectsList.map(p => 
+          p.projectId === projectId ? project : p
+        );
+        setProjectsList(updatedProjects);
+      }
+
     } catch (error) {
       console.error('Error updating cover image:', error);
-      setError('Erreur lors de la mise à jour de l\'image de couverture');
+      setUiError(error instanceof Error ? error.message : 'Erreur lors de la mise à jour de l\'image de couverture');
     }
   };
 
-  const handleCoverImageChange = async (event: React.ChangeEvent<HTMLInputElement>, project: ProjectMetadata) => {
+  const handleCoverImageChange = async (event: React.ChangeEvent<HTMLInputElement>, projectId: string) => {
     const file = event.target.files?.[0];
     if (file) {
-      await handleUpdateCoverImage(project, file);
+      await handleUpdateCoverImage(projectId, file);
     }
     event.target.value = '';
   };
-
-  const handleKeyPress = (event: React.KeyboardEvent) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      handleCreateProject();
-    }
-  };
-
-  const handleImportPov = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const povService = PovExportService.getInstance();
-      const { nodes, edges } = await povService.importFromPovFile(file);
-      
-      // Créer un nouveau projet avec le scénario importé
-      const projectService = ProjectService.getInstance();
-      const projectId = await projectService.createProject(file.name.replace('.pov', ''));
-      const project = await projectService.loadProject(projectId);
-      
-      if (project) {
-        project.nodes = nodes;
-        project.edges = edges;
-        await projectService.saveProject(project);
-      }
-    } catch (error) {
-      console.error('Error importing POV:', error);
-      setError('Erreur lors de l\'import du fichier POV');
-    }
-
-    // Reset input
-    event.target.value = '';
-  }, []);
 
   const handlePlayScenario = async (project: ProjectMetadata) => {
     try {
       console.log('Loading project:', project.projectId);
+      // Charger le projet complet
       const fullProject = await projectService.current.loadProject(project.projectId);
       if (!fullProject) {
         throw new Error('Projet non trouvé');
       }
+
+      // Créer une instance de PovExportService
+      const povExportService = PovExportService.getInstance();
       
-      console.log('Project loaded:', fullProject);
-      const povFile = await povExportService.current.exportScenario(
+      // Exporter le scénario
+      const povFile = await povExportService.exportScenario(
         fullProject.scenario?.scenarioTitle || 'Sans titre',
         fullProject.nodes || [],
         fullProject.edges || []
       );
-      console.log('POV file created:', povFile);
 
-      setPovFile(povFile);
+      // Convertir le povFile en format attendu par PovPlayer
+      const scenario = {
+        nodes: povFile.nodes || [],
+        edges: povFile.edges || [],
+        media: povFile.media || {}
+      };
+
+      setPovFile(scenario);
       setShowPovPlayer(true);
     } catch (error) {
       console.error('Error playing scenario:', error);
-      setError('Erreur lors du lancement du scénario');
+      setUiError('Erreur lors du lancement du scénario');
     }
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* PovPlayer Modal */}
-      {showPovPlayer && povFile && (
-        <PovPlayer
-          scenario={povFile}
-          onClose={() => {
-            setShowPovPlayer(false);
-            setPovFile(null);
-          }}
-        />
-      )}
-
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h4" component="h1">
+    <Box sx={{ 
+      height: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      bgcolor: 'background.default'
+    }}>
+      {/* Header avec le titre et les boutons */}
+      <Box sx={{ 
+        p: 2, 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'space-between',
+        borderBottom: 1,
+        borderColor: 'divider'
+      }}>
+        <Typography variant="h5" component="h1">
           Bibliothèque de Projets
         </Typography>
         <Button
@@ -402,175 +362,80 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
         </Button>
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
+      {/* Zone de scroll pour la grille de projets */}
+      <Box sx={{ 
+        flexGrow: 1,
+        overflow: 'auto',
+        p: 2
+      }}>
+        {/* Grille de projets */}
+        <Grid container spacing={3}>
+          {projectsList.map((project) => (
+            <Grid item xs={12} sm={6} md={4} key={project.projectId}>
+              <ProjectCard
+                project={project}
+                onSelect={() => onProjectSelect(project.projectId)}
+                onDelete={onProjectDelete ? () => onProjectDelete(project.projectId) : undefined}
+                onPlay={() => handlePlayScenario(project)}
+                onImageChange={(e) => handleCoverImageChange(e, project.projectId)}
+              />
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+
+      {/* Message d'erreur */}
+      {uiError && (
+        <Alert 
+          severity="error" 
+          sx={{ position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)' }}
+          onClose={() => setUiError(null)}
+        >
+          {uiError}
         </Alert>
       )}
 
-      {loading ? (
-        <CircularProgress />
-      ) : (
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 2 }}>
-          {projects.map((project) => (
-            <Card 
-              key={project.projectId} 
-              sx={{ 
-                display: 'flex', 
-                flexDirection: 'column',
-                position: 'relative',
-                minHeight: '200px',
-                backgroundImage: project.scenario?.coverImage ? 
-                  `url(${mediaUrls[project.scenario.coverImage] || ''})` : 
-                  'none',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                '&::before': project.scenario?.coverImage ? {
-                  content: '""',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                  zIndex: 1
-                } : {}
-              }}
-            >
-              <CardContent sx={{ 
-                flexGrow: 1,
-                position: 'relative',
-                zIndex: 2,
-                color: project.scenario?.coverImage ? 'white' : 'inherit'
-              }}>
-                <Typography variant="h6" component="div" gutterBottom>
-                  {project.scenario?.scenarioTitle || 'Sans titre'}
-                </Typography>
-                {project.scenario?.description && (
-                  <Typography 
-                    variant="body2" 
-                    color={project.scenario?.coverImage ? 'rgba(255, 255, 255, 0.7)' : 'text.secondary'} 
-                    gutterBottom
-                  >
-                    {project.scenario.description}
-                  </Typography>
-                )}
-                <Typography 
-                  variant="caption" 
-                  color={project.scenario?.coverImage ? 'rgba(255, 255, 255, 0.7)' : 'text.secondary'} 
-                  display="block"
-                >
-                  Créé le: {new Date(project.createdAt).toLocaleDateString()}
-                </Typography>
-                {project.updatedAt && project.updatedAt !== project.createdAt && (
-                  <Typography 
-                    variant="caption" 
-                    color={project.scenario?.coverImage ? 'rgba(255, 255, 255, 0.7)' : 'text.secondary'} 
-                    display="block"
-                  >
-                    Modifié le: {new Date(project.updatedAt).toLocaleDateString()}
-                  </Typography>
-                )}
-              </CardContent>
-              <CardActions sx={{ position: 'relative', zIndex: 2 }}>
-                <IconButton
-                  size="small"
-                  onClick={() => handlePlayScenario(project)}
-                  title="Lancer le scénario"
-                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
-                >
-                  <PlayArrowIcon />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => onProjectSelect(project.projectId)}
-                  title="Ouvrir"
-                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
-                >
-                  <OpenInNewIcon />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => setEditingProject(project)}
-                  title="Modifier les métadonnées"
-                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
-                >
-                  <EditIcon />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  component="label"
-                  title="Changer l'image de couverture"
-                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
-                >
-                  <input
-                    type="file"
-                    hidden
-                    accept="image/*"
-                    onChange={(e) => handleCoverImageChange(e, project)}
-                  />
-                  <ImageIcon />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => handleDeleteProject(project.projectId)}
-                  title="Supprimer"
-                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </CardActions>
-            </Card>
-          ))}
-        </Box>
-      )}
-
+      {/* Dialogue de création de projet */}
       <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)}>
-        <DialogTitle>Nouveau Projet</DialogTitle>
+        <DialogTitle>Créer un nouveau projet</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
             margin="dense"
-            label="Titre"
+            label="Titre du projet"
             fullWidth
             value={newProjectTitle}
             onChange={(e) => setNewProjectTitle(e.target.value)}
-            onKeyPress={handleKeyPress}
-            error={error === 'Le titre est requis'}
-            helperText={error === 'Le titre est requis' ? 'Le titre est requis' : ''}
           />
           <TextField
             margin="dense"
             label="Description"
             fullWidth
             multiline
-            rows={3}
+            rows={4}
             value={newProjectDescription}
             onChange={(e) => setNewProjectDescription(e.target.value)}
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreateDialogOpen(false)}>Annuler</Button>
-          <Button 
-            onClick={handleCreateProject} 
-            variant="contained" 
-            color="primary"
-            disabled={!newProjectTitle.trim()}
-          >
+          <Button onClick={handleCreateProject} variant="contained" color="primary">
             Créer
           </Button>
         </DialogActions>
       </Dialog>
 
-      {editingProject && (
-        <ProjectMetadataDialog
-          open={!!editingProject}
-          project={editingProject}
-          onClose={() => setEditingProject(null)}
-          onSave={handleUpdateMetadata}
+      {/* Lecteur POV */}
+      {showPovPlayer && povFile && (
+        <PovPlayer
+          povFile={povFile}
+          onClose={() => {
+            setShowPovPlayer(false);
+            setPovFile(null);
+          }}
         />
       )}
-    </Container>
+    </Box>
   );
 };
 
