@@ -145,11 +145,16 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
   const projectService = useRef(ProjectService.getInstance());
   const povExportService = useRef(PovExportService.getInstance());
 
-  const [mediaLibrary] = useState(() => MediaLibraryService.getInstance());
+  const [mediaLibrary, setMediaLibrary] = useState<MediaLibraryService | null>(null);
+
+  useEffect(() => {
+    MediaLibraryService.getInstance().then(setMediaLibrary);
+  }, []);
 
   const getMediaUrl = useCallback(async (mediaId: string) => {
+    if (!mediaLibrary) return '';
     try {
-      const media = await (await mediaLibrary).getMedia(mediaId);
+      const media = await mediaLibrary.getMedia(mediaId);
       return media.url;
     } catch (error) {
       console.error('Error getting media URL:', error);
@@ -257,6 +262,10 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
     try {
       setError(null);
       
+      if (!mediaLibrary) {
+        throw new Error('MediaLibraryService not initialized');
+      }
+
       // Vérifier le type et la taille du fichier
       if (!file.type.startsWith('image/')) {
         setError('Le fichier doit être une image');
@@ -281,7 +290,6 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
       };
 
       // Stocker l'image via MediaLibraryService
-      const mediaLibrary = await MediaLibraryService.getInstance();
       const mediaFile = await mediaLibrary.uploadMedia(file, mediaMetadata);
       
       // Mettre à jour les métadonnées du projet
