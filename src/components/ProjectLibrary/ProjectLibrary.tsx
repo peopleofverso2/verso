@@ -138,6 +138,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
   const [newProjectTitle, setNewProjectTitle] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [editingProject, setEditingProject] = useState<ProjectMetadata | null>(null);
+  const [showPovPlayer, setShowPovPlayer] = useState(false);
   const [playingProject, setPlayingProject] = useState<ProjectMetadata | null>(null);
   const [error, setError] = useState<string | null>(null);
   const projectService = ProjectService.getInstance();
@@ -270,7 +271,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
     event.target.value = '';
   }, []);
 
-  const handlePlayProject = async (project: ProjectMetadata) => {
+  const handlePlayScenario = async (project: ProjectMetadata) => {
     try {
       const projectService = await ProjectService.getInstance();
       const fullProject = await projectService.loadProject(project.projectId);
@@ -278,16 +279,18 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
         throw new Error('Projet non trouvé');
       }
       
-      // Lire directement le fichier scenario.pov
-      const povFile = await projectService.loadFile(project.projectId, 'scenario.pov');
-      if (!povFile) {
-        throw new Error('Fichier POV non trouvé');
-      }
-
-      setPlayingProject(project);
+      const povService = PovExportService.getInstance();
+      await povService.exportScenario(
+        fullProject.scenario?.scenarioTitle || 'Sans titre',
+        fullProject.nodes || [],
+        fullProject.edges || []
+      );
+      
+      setPlayingProject(fullProject);
+      setShowPovPlayer(true);
     } catch (error) {
-      console.error('Error playing project:', error);
-      setError('Erreur lors du lancement du projet');
+      console.error('Error playing scenario:', error);
+      setError('Erreur lors du lancement du scénario');
     }
   };
 
@@ -340,7 +343,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
               <CardActions>
                 <IconButton
                   size="small"
-                  onClick={() => handlePlayProject(project)}
+                  onClick={() => handlePlayScenario(project)}
                   title="Lancer le scénario"
                 >
                   <PlayArrowIcon />
@@ -418,10 +421,10 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
         />
       )}
 
-      {playingProject && (
+      {showPovPlayer && playingProject && (
         <Dialog
-          open={!!playingProject}
-          onClose={() => setPlayingProject(null)}
+          open={showPovPlayer}
+          onClose={() => setShowPovPlayer(false)}
           maxWidth="lg"
           fullWidth
         >
@@ -431,7 +434,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
           <DialogContent>
             <PovPlayer
               scenario={playingProject}
-              onClose={() => setPlayingProject(null)}
+              onClose={() => setShowPovPlayer(false)}
             />
           </DialogContent>
         </Dialog>
