@@ -32,7 +32,7 @@ import { ProjectService } from '../../services/projectService';
 import { ProjectMetadata } from '../../types/project';
 import ProjectList from '../ProjectList/ProjectList';
 import { PovExportService } from '../../services/povExportService';
-import { PovPlayer } from '../Player/PovPlayer';
+import PovPlayer from '../Player/PovPlayer';
 
 interface ProjectLibraryProps {
   onProjectSelect: (projectId: string) => void;
