@@ -111,15 +111,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         >
           Editor
         </Typography>
-        <Tooltip title={isPlaybackMode ? 'Stop Playback' : 'Start Playback'} placement="bottom">
-          <ActionButton
-            onClick={isPlaybackMode ? onStopPlayback : onStartPlayback}
-            color={isPlaybackMode ? 'error' : 'primary'}
-            size="small"
-          >
-            {isPlaybackMode ? <StopIcon /> : <PlayIcon />}
-          </ActionButton>
-        </Tooltip>
         <Tooltip title="Save Changes" placement="bottom">
           <ActionButton
             onClick={onSave}
@@ -222,6 +213,23 @@ const Sidebar: React.FC<SidebarProps> = ({
       {children}
 
       <Box sx={{ mt: 'auto' }}>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<PlayIcon />}
+          fullWidth
+          onClick={onStartPlayback}
+          sx={{
+            mb: 2,
+            borderRadius: 2,
+            textTransform: 'none',
+            fontWeight: 600,
+            height: 48,
+            fontSize: '1rem',
+          }}
+        >
+          Play Full Screen
+        </Button>
         <Typography 
           variant="caption" 
           sx={{ 
