@@ -26,6 +26,7 @@ import {
   GetApp as GetAppIcon,
   OpenInNew as OpenInNewIcon,
   PlayArrow as PlayArrowIcon,
+  Image as ImageIcon,
 } from '@mui/icons-material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { ProjectService } from '../../services/projectService';
@@ -33,6 +34,7 @@ import { ProjectMetadata } from '../../types/project';
 import ProjectList from '../ProjectList/ProjectList';
 import { PovExportService } from '../../services/povExportService';
 import PovPlayer from '../Player/PovPlayer';
+import { MediaLibraryService } from '../../services/mediaLibraryService';
 
 interface ProjectLibraryProps {
   onProjectSelect: (projectId: string) => void;
@@ -143,6 +145,37 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
   const projectService = useRef(ProjectService.getInstance());
   const povExportService = useRef(PovExportService.getInstance());
 
+  const [mediaLibrary, setMediaLibrary] = useState<MediaLibraryService | null>(null);
+
+  useEffect(() => {
+    MediaLibraryService.getInstance().then(setMediaLibrary);
+  }, []);
+
+  const getMediaUrl = useCallback(async (mediaId: string) => {
+    if (!mediaLibrary) return '';
+    try {
+      const media = await mediaLibrary.getMedia(mediaId);
+      return media.url;
+    } catch (error) {
+      console.error('Error getting media URL:', error);
+      return '';
+    }
+  }, [mediaLibrary]);
+
+  const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    projects.forEach(async (project) => {
+      if (project.scenario?.coverImage && !mediaUrls[project.scenario.coverImage]) {
+        const url = await getMediaUrl(project.scenario.coverImage);
+        setMediaUrls(prev => ({
+          ...prev,
+          [project.scenario.coverImage]: url
+        }));
+      }
+    });
+  }, [projects, getMediaUrl]);
+
   const loadProjects = async () => {
     try {
       setLoading(true);
@@ -223,6 +256,65 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
       console.error('Error updating project metadata:', error);
       setError('Erreur lors de la mise à jour des métadonnées');
     }
+  };
+
+  const handleUpdateCoverImage = async (project: ProjectMetadata, file: File) => {
+    try {
+      setError(null);
+      
+      if (!mediaLibrary) {
+        throw new Error('MediaLibraryService not initialized');
+      }
+
+      // Vérifier le type et la taille du fichier
+      if (!file.type.startsWith('image/')) {
+        setError('Le fichier doit être une image');
+        return;
+      }
+      
+      if (file.size > 5 * 1024 * 1024) { // 5MB max
+        setError('L\'image ne doit pas dépasser 5MB');
+        return;
+      }
+
+      // Créer les métadonnées du média
+      const mediaMetadata: MediaMetadata = {
+        id: `project-cover-${project.projectId}`,
+        type: 'image',
+        mimeType: file.type,
+        name: file.name,
+        size: file.size,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        tags: ['project-cover']
+      };
+
+      // Stocker l'image via MediaLibraryService
+      const mediaFile = await mediaLibrary.uploadMedia(file, mediaMetadata);
+      
+      // Mettre à jour les métadonnées du projet
+      const updatedProject = {
+        ...project,
+        scenario: {
+          ...project.scenario,
+          coverImage: mediaFile.id
+        }
+      };
+      
+      await projectService.current.updateProjectMetadata(updatedProject);
+      await loadProjects();
+    } catch (error) {
+      console.error('Error updating cover image:', error);
+      setError('Erreur lors de la mise à jour de l\'image de couverture');
+    }
+  };
+
+  const handleCoverImageChange = async (event: React.ChangeEvent<HTMLInputElement>, project: ProjectMetadata) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      await handleUpdateCoverImage(project, file);
+    }
+    event.target.value = '';
   };
 
   const handleKeyPress = (event: React.KeyboardEvent) => {
@@ -321,30 +413,71 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
       ) : (
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 2 }}>
           {projects.map((project) => (
-            <Card key={project.projectId} sx={{ display: 'flex', flexDirection: 'column' }}>
-              <CardContent sx={{ flexGrow: 1 }}>
+            <Card 
+              key={project.projectId} 
+              sx={{ 
+                display: 'flex', 
+                flexDirection: 'column',
+                position: 'relative',
+                minHeight: '200px',
+                backgroundImage: project.scenario?.coverImage ? 
+                  `url(${mediaUrls[project.scenario.coverImage] || ''})` : 
+                  'none',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                '&::before': project.scenario?.coverImage ? {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                  zIndex: 1
+                } : {}
+              }}
+            >
+              <CardContent sx={{ 
+                flexGrow: 1,
+                position: 'relative',
+                zIndex: 2,
+                color: project.scenario?.coverImage ? 'white' : 'inherit'
+              }}>
                 <Typography variant="h6" component="div" gutterBottom>
                   {project.scenario?.scenarioTitle || 'Sans titre'}
                 </Typography>
                 {project.scenario?.description && (
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                  <Typography 
+                    variant="body2" 
+                    color={project.scenario?.coverImage ? 'rgba(255, 255, 255, 0.7)' : 'text.secondary'} 
+                    gutterBottom
+                  >
                     {project.scenario.description}
                   </Typography>
                 )}
-                <Typography variant="caption" color="text.secondary" display="block">
+                <Typography 
+                  variant="caption" 
+                  color={project.scenario?.coverImage ? 'rgba(255, 255, 255, 0.7)' : 'text.secondary'} 
+                  display="block"
+                >
                   Créé le: {new Date(project.createdAt).toLocaleDateString()}
                 </Typography>
                 {project.updatedAt && project.updatedAt !== project.createdAt && (
-                  <Typography variant="caption" color="text.secondary" display="block">
+                  <Typography 
+                    variant="caption" 
+                    color={project.scenario?.coverImage ? 'rgba(255, 255, 255, 0.7)' : 'text.secondary'} 
+                    display="block"
+                  >
                     Modifié le: {new Date(project.updatedAt).toLocaleDateString()}
                   </Typography>
                 )}
               </CardContent>
-              <CardActions>
+              <CardActions sx={{ position: 'relative', zIndex: 2 }}>
                 <IconButton
                   size="small"
                   onClick={() => handlePlayScenario(project)}
                   title="Lancer le scénario"
+                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
                 >
                   <PlayArrowIcon />
                 </IconButton>
@@ -352,6 +485,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
                   size="small"
                   onClick={() => onProjectSelect(project.projectId)}
                   title="Ouvrir"
+                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
                 >
                   <OpenInNewIcon />
                 </IconButton>
@@ -359,13 +493,29 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
                   size="small"
                   onClick={() => setEditingProject(project)}
                   title="Modifier les métadonnées"
+                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
                 >
                   <EditIcon />
                 </IconButton>
                 <IconButton
                   size="small"
+                  component="label"
+                  title="Changer l'image de couverture"
+                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
+                >
+                  <input
+                    type="file"
+                    hidden
+                    accept="image/*"
+                    onChange={(e) => handleCoverImageChange(e, project)}
+                  />
+                  <ImageIcon />
+                </IconButton>
+                <IconButton
+                  size="small"
                   onClick={() => handleDeleteProject(project.projectId)}
                   title="Supprimer"
+                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
                 >
                   <DeleteIcon />
                 </IconButton>

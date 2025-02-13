@@ -101,14 +101,26 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
         return;
       }
       try {
+        console.log('Loading media for node:', id);
         const mediaLibrary = await MediaLibraryService.getInstance();
         const media = await mediaLibrary.getMedia(data.mediaId);
+        console.log('Media loaded:', media);
+        
         if (media && media.url) {
           setMediaUrl(media.url);
           if (media.metadata.dimensions) {
             setDimensions(media.metadata.dimensions);
           }
+          if (media.metadata.type) {
+            data.onDataChange?.(id, {
+              ...data,
+              mediaType: media.metadata.type
+            });
+          }
           setError(undefined);
+        } else {
+          console.error('Media or URL is missing');
+          setError('Media not found');
         }
       } catch (error) {
         console.error('Error loading media:', error);
@@ -125,7 +137,7 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
         videoRef.current.load();
       }
     };
-  }, [data.mediaId]);
+  }, [data.mediaId, id]);
 
   // Load audio on mount and when audioId changes
   useEffect(() => {
@@ -501,60 +513,26 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
                   height: '100%',
                   objectFit: 'contain',
                 }}
+                controls={!data.isPlaybackMode}
                 onEnded={() => {
-                  setIsPlaying(false);
+                  if (data.onMediaEnd) {
+                    data.onMediaEnd(id);
+                  }
                   if (data.content?.timer?.loop) {
-                    videoRef.current?.play().catch(console.error);
-                    setIsPlaying(true);
-                  } else {
-                    data.onMediaEnd?.(id);
+                    videoRef.current?.play();
                   }
                 }}
-                controls={!data.isPlaybackMode}
-                muted={isMuted}
-                loop={data.content?.timer?.loop}
-                preload="auto"
-                onError={(e) => {
-                  console.error('Video error:', e);
-                  setError('Failed to play video');
-                }}
-                onPlay={() => setIsPlaying(true)}
-                onPause={() => setIsPlaying(false)}
               />
             ) : data.mediaType === 'image' ? (
-              <Box
-                sx={{
-                  position: 'relative',
+              <img
+                src={mediaUrl}
+                alt="Media content"
+                style={{
                   width: '100%',
                   height: '100%',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  overflow: 'hidden',
+                  objectFit: 'contain',
                 }}
-              >
-                <img
-                  src={mediaUrl}
-                  style={{ 
-                    maxWidth: '100%',
-                    maxHeight: '100%',
-                    width: 'auto',
-                    height: 'auto',
-                    objectFit: 'contain',
-                  }}
-                  alt="Node content"
-                  onError={() => setError('Failed to load image')}
-                  onLoad={(e) => {
-                    const img = e.target as HTMLImageElement;
-                    if (!dimensions) {
-                      setDimensions({
-                        width: img.naturalWidth,
-                        height: img.naturalHeight
-                      });
-                    }
-                  }}
-                />
-              </Box>
+              />
             ) : (
               <Box
                 sx={{
@@ -563,10 +541,21 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
                   display: 'flex',
                   justifyContent: 'center',
                   alignItems: 'center',
-                  bgcolor: 'action.hover',
+                  bgcolor: 'background.default',
+                  color: 'text.secondary',
                 }}
               >
-                <MovieIcon sx={{ fontSize: 48, color: 'text.secondary' }} />
+                {error ? (
+                  <Box sx={{ p: 2, textAlign: 'center' }}>
+                    <MovieIcon sx={{ fontSize: 40, mb: 1 }} />
+                    <div>{error}</div>
+                  </Box>
+                ) : (
+                  <Box sx={{ p: 2, textAlign: 'center' }}>
+                    <MovieIcon sx={{ fontSize: 40, mb: 1 }} />
+                    <div>Cliquez pour ajouter un média</div>
+                  </Box>
+                )}
               </Box>
             )}
 

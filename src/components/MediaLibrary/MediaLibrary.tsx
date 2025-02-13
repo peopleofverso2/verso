@@ -226,63 +226,105 @@ export default function MediaLibrary({
   };
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Stack spacing={2}>
-        {/* Barre de recherche et filtres */}
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-          <TextField
-            size="small"
-            placeholder="Rechercher..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            InputProps={{
-              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-            }}
-            sx={{ flexGrow: 1 }}
-          />
-          <MediaTypeFilter value={mediaType} onChange={setMediaType} />
-          <Button
-            variant="contained"
-            startIcon={<CloudUploadIcon />}
-            onClick={() => setUploadOpen(true)}
-          >
-            Upload
-          </Button>
-        </Box>
-
-        {/* Tags */}
-        <Autocomplete
-          multiple
-          size="small"
-          options={availableTags}
-          value={selectedTags}
-          onChange={(_, newValue) => setSelectedTags(newValue)}
-          renderInput={(params) => (
-            <TextField {...params} placeholder="Filtrer par tags..." />
-          )}
-        />
-
-        {/* Grille de médias */}
-        <Grid container spacing={2}>
-          {filteredMedia.map((mediaFile) => (
-            <Grid item xs={12} sm={6} md={4} lg={3} key={mediaFile.metadata.id}>
-              <MediaCard
-                mediaFile={mediaFile}
-                onSelect={handleSelect}
-                onDelete={handleDelete}
-                selected={selectedMedia.has(mediaFile.metadata.id)}
-              />
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* Message si aucun résultat */}
-        {filteredMedia.length === 0 && (
-          <Typography variant="body1" color="text.secondary" align="center">
-            Aucun média trouvé
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
+      {/* Barre d'actions sticky en haut */}
+      {onSelect && (
+        <Paper
+          elevation={3}
+          sx={{
+            position: 'sticky',
+            top: 0,
+            p: 1,
+            backgroundColor: 'background.paper',
+            borderBottom: 1,
+            borderColor: 'divider',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <Typography variant="body2" sx={{ pl: 2 }}>
+            {selectedMedia.size > 0 
+              ? `${selectedMedia.size} média${selectedMedia.size > 1 ? 's' : ''} sélectionné${selectedMedia.size > 1 ? 's' : ''}`
+              : 'Aucun média sélectionné'}
           </Typography>
-        )}
-      </Stack>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            {selectedMedia.size > 0 && (
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<CheckIcon />}
+                onClick={handleConfirmSelection}
+              >
+                Valider
+              </Button>
+            )}
+          </Box>
+        </Paper>
+      )}
+
+      {/* Contenu principal */}
+      <Box sx={{ flex: 1, overflow: 'auto' }}>
+        <Box sx={{ p: 2 }}>
+          <Stack spacing={2}>
+            {/* Barre de recherche et filtres */}
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+              <TextField
+                size="small"
+                placeholder="Rechercher..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                InputProps={{
+                  startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                }}
+                sx={{ flexGrow: 1 }}
+              />
+              <MediaTypeFilter value={mediaType} onChange={setMediaType} />
+              <Button
+                variant="contained"
+                startIcon={<CloudUploadIcon />}
+                onClick={() => setUploadOpen(true)}
+              >
+                Upload
+              </Button>
+            </Box>
+
+            {/* Tags */}
+            <Autocomplete
+              multiple
+              size="small"
+              options={availableTags}
+              value={selectedTags}
+              onChange={(_, newValue) => setSelectedTags(newValue)}
+              renderInput={(params) => (
+                <TextField {...params} placeholder="Filtrer par tags..." />
+              )}
+            />
+
+            {/* Grille de médias */}
+            <Grid container spacing={2}>
+              {filteredMedia.map((mediaFile) => (
+                <Grid item xs={12} sm={6} md={4} lg={3} key={mediaFile.metadata.id}>
+                  <MediaCard
+                    mediaFile={mediaFile}
+                    onSelect={handleSelect}
+                    onDelete={handleDelete}
+                    selected={selectedMedia.has(mediaFile.metadata.id)}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+
+            {/* Message si aucun résultat */}
+            {filteredMedia.length === 0 && (
+              <Typography variant="body1" color="text.secondary" align="center">
+                Aucun média trouvé
+              </Typography>
+            )}
+          </Stack>
+        </Box>
+      </Box>
 
       {/* Dialogs et notifications */}
       <UploadDialog
@@ -301,23 +343,6 @@ export default function MediaLibrary({
           {snackbar.message}
         </Alert>
       </Snackbar>
-
-      {/* Bouton de confirmation pour la sélection multiple */}
-      {multiSelect && selectedMedia.size > 0 && (
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<CheckIcon />}
-          onClick={handleConfirmSelection}
-          sx={{
-            position: 'fixed',
-            bottom: 16,
-            right: 16,
-          }}
-        >
-          Confirmer ({selectedMedia.size})
-        </Button>
-      )}
     </Box>
   );
 }
