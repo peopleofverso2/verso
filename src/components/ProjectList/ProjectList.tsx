@@ -1,5 +1,5 @@
 import React from 'react';
-import { Grid, Typography, Paper } from '@mui/material';
+import { Grid } from '@mui/material';
 import { ProjectMetadata } from '../../types/project';
 import ProjectCard from './ProjectCard';
 
@@ -9,18 +9,18 @@ interface ProjectListProps {
   onProjectDelete?: (projectId: string) => void;
 }
 
-const ProjectList: React.FC<ProjectListProps> = ({ 
-  projects, 
+const ProjectList: React.FC<ProjectListProps> = ({
+  projects,
   onProjectSelect,
-  onProjectDelete,
+  onProjectDelete
 }) => {
   if (projects.length === 0) {
     return (
-      <Paper sx={{ p: 3, textAlign: 'center' }}>
-        <Typography variant="body1" color="text.secondary">
-          No scenarios yet. Create your first one!
-        </Typography>
-      </Paper>
+      <Grid container spacing={3}>
+        <Grid item xs={12} sm={6} md={4}>
+          <ProjectCard />
+        </Grid>
+      </Grid>
     );
   }
 
@@ -30,8 +30,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
         <Grid item xs={12} sm={6} md={4} key={project.projectId}>
           <ProjectCard
             project={project}
-            onProjectSelect={onProjectSelect}
-            onProjectDelete={onProjectDelete}
+            onSelect={() => onProjectSelect(project.projectId)}
+            onDelete={onProjectDelete ? () => onProjectDelete(project.projectId) : undefined}
           />
         </Grid>
       ))}

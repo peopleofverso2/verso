@@ -240,20 +240,23 @@ export class ProjectService {
 
       console.log('Raw projects:', projects);
       
-      // Convertir en ProjectMetadata
+      // Convertir en ProjectMetadata en préservant toutes les données du scénario
       const projectMetadata = projects.map(project => ({
         projectId: project.projectId,
         scenario: {
+          ...project.scenario, // Préserver toutes les données du scénario
           scenarioTitle: project.scenario?.scenarioTitle || 'Sans titre',
-          description: project.scenario?.description || ''
+          description: project.scenario?.description || '',
+          coverImageId: project.scenario?.coverImageId || null,
+          thumbnails: project.scenario?.thumbnails || [],
         },
         createdAt: project.createdAt,
         updatedAt: project.updatedAt
       }));
 
       console.log('Project metadata with full structure:', projectMetadata);
-
       return projectMetadata;
+
     } catch (error) {
       console.error('Error getting project list:', error);
       throw error;

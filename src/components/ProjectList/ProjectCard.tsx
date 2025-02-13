@@ -1,80 +1,148 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
-  CardActions,
+  CardMedia,
   Typography,
   IconButton,
   Box,
-  Tooltip,
+  CardActions,
+  Skeleton,
 } from '@mui/material';
 import {
   PlayArrow as PlayArrowIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
+  Edit as EditIcon,
+  Image as ImageIcon,
 } from '@mui/icons-material';
 import { ProjectMetadata } from '../../types/project';
-import { ProjectService } from '../../services/projectService';
+import { MediaLibraryService } from '../../services/mediaLibraryService';
 
 interface ProjectCardProps {
-  project: ProjectMetadata;
-  onProjectSelect: (projectId: string) => void;
-  onProjectDelete?: (projectId: string) => void;
+  project?: ProjectMetadata;
+  onSelect?: () => void;
+  onDelete?: () => void;
 }
 
 const ProjectCard: React.FC<ProjectCardProps> = ({
   project,
-  onProjectSelect,
-  onProjectDelete,
+  onSelect,
+  onDelete,
 }) => {
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('fr-FR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  const [coverUrl, setCoverUrl] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadCoverImage = async () => {
+      if (project?.scenario?.coverImageId) {
+        try {
+          const mediaLibrary = await MediaLibraryService.getInstance();
+          const media = await mediaLibrary.getMedia(project.scenario.coverImageId);
+          setCoverUrl(media.url);
+        } catch (error) {
+          console.error('Error loading cover image:', error);
+        }
+      }
+      setLoading(false);
+    };
+
+    loadCoverImage();
+  }, [project?.scenario?.coverImageId]);
+
+  if (!project) {
+    return (
+      <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <CardContent sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Typography variant="body1" color="text.secondary">
+            Créez votre premier scénario !
+          </Typography>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <Card sx={{ minWidth: 275, maxWidth: 345, m: 1 }}>
-      <CardContent>
-        <Typography variant="h5" component="div" gutterBottom>
-          {project.scenarioTitle}
+    <Card sx={{ 
+      height: '100%', 
+      display: 'flex', 
+      flexDirection: 'column',
+      position: 'relative'
+    }}>
+      {loading ? (
+        <Skeleton 
+          variant="rectangular" 
+          width="100%" 
+          height={200}
+          animation="wave"
+        />
+      ) : (
+        coverUrl ? (
+          <CardMedia
+            component="img"
+            height={200}
+            image={coverUrl}
+            alt={project.scenario?.scenarioTitle || 'Cover image'}
+            sx={{ objectFit: 'cover' }}
+          />
+        ) : (
+          <Box
+            sx={{
+              height: 200,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: 'grey.100'
+            }}
+          >
+            <ImageIcon sx={{ fontSize: 60, color: 'grey.400' }} />
+          </Box>
+        )
+      )}
+
+      <CardContent sx={{ flexGrow: 1 }}>
+        <Typography variant="h6" component="h2" gutterBottom noWrap>
+          {project.scenario?.scenarioTitle || 'Sans titre'}
         </Typography>
-        <Typography sx={{ mb: 1.5 }} color="text.secondary">
-          Created: {formatDate(project.createdAt)}
-        </Typography>
-        <Typography variant="body2">
-          Last modified: {formatDate(project.updatedAt)}
-        </Typography>
+        {project.scenario?.description && (
+          <Typography variant="body2" color="text.secondary" sx={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+          }}>
+            {project.scenario.description}
+          </Typography>
+        )}
       </CardContent>
-      <CardActions>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-          <Box>
-            <Tooltip title="Edit Scenario">
-              <IconButton
-                size="small"
-                onClick={() => onProjectSelect(project.projectId)}
-              >
-                <EditIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-          <Box>
-            {onProjectDelete && (
-              <Tooltip title="Delete Scenario">
-                <IconButton
-                  size="small"
-                  onClick={() => onProjectDelete(project.projectId)}
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </Tooltip>
-            )}
-          </Box>
-        </Box>
+
+      <CardActions sx={{ justifyContent: 'flex-end', p: 1 }}>
+        <IconButton 
+          size="small" 
+          onClick={onSelect}
+          color="primary"
+          title="Éditer"
+        >
+          <EditIcon />
+        </IconButton>
+        <IconButton 
+          size="small" 
+          onClick={onSelect}
+          color="primary"
+          title="Lancer"
+        >
+          <PlayArrowIcon />
+        </IconButton>
+        {onDelete && (
+          <IconButton 
+            size="small" 
+            onClick={onDelete}
+            color="error"
+            title="Supprimer"
+          >
+            <DeleteIcon />
+          </IconButton>
+        )}
       </CardActions>
     </Card>
   );
