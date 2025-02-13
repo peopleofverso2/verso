@@ -295,20 +295,34 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
   }, [projectId, project, nodes, edges, projectService]);
 
   // Démarrer la lecture
-  const startPlayback = useCallback(() => {
-    setIsPlaybackMode(true);
-    // Trouver le premier nœud (sans connexions entrantes)
-    const targetNodeIds = new Set(edges.map(edge => edge.target));
-    const startNodes = nodes.filter(node => !targetNodeIds.has(node.id));
-    if (startNodes.length > 0) {
-      setActiveNodeId(startNodes[0].id);
+  const startPlayback = useCallback(async () => {
+    try {
+      if (!project) return;
+
+      // Exporter le scénario au format POV
+      const scenario = await povExportService.current.exportScenario(
+        project.scenario.scenarioTitle,
+        nodes,
+        edges
+      );
+
+      // Ouvrir le lecteur POV
+      setPovScenario(scenario);
+      setShowPovPlayer(true);
+    } catch (error) {
+      console.error('Error starting playback:', error);
+      setSnackbar({
+        open: true,
+        message: 'Error starting playback',
+        severity: 'error'
+      });
     }
-  }, [nodes, edges]);
+  }, [project, nodes, edges]);
 
   // Arrêter la lecture
   const stopPlayback = useCallback(() => {
-    setIsPlaybackMode(false);
-    setActiveNodeId(null);
+    setShowPovPlayer(false);
+    setPovScenario(null);
   }, []);
 
   const onDragOver = useCallback((event: DragEvent) => {
@@ -587,8 +601,8 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
           isSaving={isSaving}
           onBackToLibrary={onBackToLibrary}
           isPlaybackMode={isPlaybackMode}
-          onStartPlayback={() => setIsPlaybackMode(true)}
-          onStopPlayback={() => setIsPlaybackMode(false)}
+          onStartPlayback={startPlayback}
+          onStopPlayback={stopPlayback}
         >
           <Box sx={{ display: 'flex', gap: 1, p: 1 }}>
             {/* Boutons Export/Import POV */}
