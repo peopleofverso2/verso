@@ -23,6 +23,7 @@ import {
   Delete as DeleteIcon,
   Add as AddIcon,
   Help as HelpIcon,
+  Edit as EditIcon,
   PlayArrow as PlayArrowIcon,
   Image as ImageIcon,
 } from '@mui/icons-material';
@@ -216,7 +217,7 @@ const ProjectCard: React.FC<{
           color="primary"
           title="Éditer"
         >
-          <HelpIcon />
+          <EditIcon />
         </IconButton>
       </CardActions>
     </Card>
