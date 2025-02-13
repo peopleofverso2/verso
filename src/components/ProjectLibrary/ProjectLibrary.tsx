@@ -278,8 +278,12 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
         throw new Error('Projet non trouvé');
       }
       
-      const povService = PovExportService.getInstance();
-      const povData = await povService.exportToPov(fullProject);
+      // Lire directement le fichier scenario.pov
+      const povFile = await projectService.loadFile(project.projectId, 'scenario.pov');
+      if (!povFile) {
+        throw new Error('Fichier POV non trouvé');
+      }
+
       setPlayingProject(project);
     } catch (error) {
       console.error('Error playing project:', error);
