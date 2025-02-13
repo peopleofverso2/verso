@@ -81,7 +81,11 @@ const ProjectCard: React.FC<{
       height: '100%', 
       display: 'flex', 
       flexDirection: 'column',
-      position: 'relative'
+      position: 'relative',
+      transition: 'box-shadow 0.2s',
+      '&:hover': {
+        boxShadow: 6
+      }
     }}>
       {loading ? (
         <Skeleton 
@@ -97,7 +101,13 @@ const ProjectCard: React.FC<{
             height={200}
             image={coverUrl}
             alt={project.scenario?.scenarioTitle || 'Cover image'}
-            sx={{ objectFit: 'cover' }}
+            sx={{ 
+              objectFit: 'cover',
+              transition: 'transform 0.2s',
+              '&:hover': {
+                transform: 'scale(1.02)'
+              }
+            }}
           />
         ) : (
           <Box
@@ -182,19 +192,22 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
   onProjectDelete
 }) => {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
   const [newProjectTitle, setNewProjectTitle] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
-  const [showPovPlayer, setShowPovPlayer] = useState(false);
-  const [povFile, setPovFile] = useState<any>(null);
-  const [uiError, setUiError] = useState<string | null>(null);
   const [projectsList, setProjectsList] = useState<ProjectMetadata[]>([]);
+  const [uiError, setUiError] = useState<string | null>(null);
+  const [povFile, setPovFile] = useState<any>(null);
+  const [showPovPlayer, setShowPovPlayer] = useState(false);
 
   const {
     projects,
     loading,
     error,
     createProject,
-    updateProjectMetadata
+    updateProjectMetadata,
+    deleteProject
   } = useProjectManager();
 
   // Synchroniser les projets avec le state local
@@ -343,6 +356,25 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
     }
   };
 
+  const handleDeleteConfirm = async () => {
+    if (!projectToDelete) return;
+
+    try {
+      await deleteProject(projectToDelete);
+      setProjectsList(projectsList.filter(p => p.projectId !== projectToDelete));
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      setUiError('Erreur lors de la suppression du projet');
+    }
+  };
+
+  const handleDeleteRequest = (projectId: string) => {
+    setProjectToDelete(projectId);
+    setDeleteDialogOpen(true);
+  };
+
   return (
     <Box sx={{ 
       height: '100vh',
@@ -385,7 +417,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
               <ProjectCard
                 project={project}
                 onSelect={() => onProjectSelect(project.projectId)}
-                onDelete={onProjectDelete ? () => onProjectDelete(project.projectId) : undefined}
+                onDelete={() => handleDeleteRequest(project.projectId)}
                 onPlay={() => handlePlayScenario(project)}
                 onImageChange={(e) => handleCoverImageChange(e, project.projectId)}
               />
@@ -431,6 +463,39 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
           <Button onClick={() => setCreateDialogOpen(false)}>Annuler</Button>
           <Button onClick={handleCreateProject} variant="contained" color="primary">
             Créer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog de confirmation de suppression */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => {
+          setDeleteDialogOpen(false);
+          setProjectToDelete(null);
+        }}
+      >
+        <DialogTitle>Confirmer la suppression</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Êtes-vous sûr de vouloir supprimer ce projet ? Cette action est irréversible.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => {
+              setDeleteDialogOpen(false);
+              setProjectToDelete(null);
+            }}
+          >
+            Annuler
+          </Button>
+          <Button 
+            onClick={handleDeleteConfirm}
+            color="error"
+            variant="contained"
+          >
+            Supprimer
           </Button>
         </DialogActions>
       </Dialog>
