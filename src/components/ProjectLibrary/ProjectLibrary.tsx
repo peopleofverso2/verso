@@ -25,12 +25,14 @@ import {
   CloudDownload as CloudDownloadIcon,
   GetApp as GetAppIcon,
   OpenInNew as OpenInNewIcon,
+  PlayArrow as PlayArrowIcon,
 } from '@mui/icons-material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { ProjectService } from '../../services/projectService';
 import { ProjectMetadata } from '../../types/project';
 import ProjectList from '../ProjectList/ProjectList';
 import { PovExportService } from '../../services/povExportService';
+import { PovPlayer } from '../Player/PovPlayer';
 
 interface ProjectLibraryProps {
   onProjectSelect: (projectId: string) => void;
@@ -136,6 +138,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
   const [newProjectTitle, setNewProjectTitle] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [editingProject, setEditingProject] = useState<ProjectMetadata | null>(null);
+  const [playingProject, setPlayingProject] = useState<ProjectMetadata | null>(null);
   const [error, setError] = useState<string | null>(null);
   const projectService = ProjectService.getInstance();
 
@@ -267,6 +270,23 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
     event.target.value = '';
   }, []);
 
+  const handlePlayProject = async (project: ProjectMetadata) => {
+    try {
+      const projectService = await ProjectService.getInstance();
+      const fullProject = await projectService.loadProject(project.projectId);
+      if (!fullProject) {
+        throw new Error('Projet non trouvé');
+      }
+      
+      const povService = PovExportService.getInstance();
+      const povData = await povService.exportToPov(fullProject);
+      setPlayingProject(project);
+    } catch (error) {
+      console.error('Error playing project:', error);
+      setError('Erreur lors du lancement du projet');
+    }
+  };
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -314,6 +334,13 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
                 )}
               </CardContent>
               <CardActions>
+                <IconButton
+                  size="small"
+                  onClick={() => handlePlayProject(project)}
+                  title="Lancer le scénario"
+                >
+                  <PlayArrowIcon />
+                </IconButton>
                 <IconButton
                   size="small"
                   onClick={() => onProjectSelect(project.projectId)}
@@ -385,6 +412,25 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
           onClose={() => setEditingProject(null)}
           onSave={handleUpdateMetadata}
         />
+      )}
+
+      {playingProject && (
+        <Dialog
+          open={!!playingProject}
+          onClose={() => setPlayingProject(null)}
+          maxWidth="lg"
+          fullWidth
+        >
+          <DialogTitle>
+            {playingProject.scenario?.scenarioTitle || 'Sans titre'}
+          </DialogTitle>
+          <DialogContent>
+            <PovPlayer
+              scenario={playingProject}
+              onClose={() => setPlayingProject(null)}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </Container>
   );
