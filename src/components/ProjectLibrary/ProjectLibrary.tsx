@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Button,
@@ -52,7 +52,6 @@ const ProjectMetadataDialog: React.FC<ProjectMetadataDialogProps> = ({
   onClose,
   onSave
 }) => {
-  console.log('Opening dialog with project:', JSON.stringify(project, null, 2));
   const [title, setTitle] = useState(project.scenario?.scenarioTitle || '');
   const [description, setDescription] = useState(project.scenario?.description || '');
   const [saving, setSaving] = useState(false);
@@ -72,7 +71,6 @@ const ProjectMetadataDialog: React.FC<ProjectMetadataDialogProps> = ({
         }
       };
       
-      console.log('Saving project with structure:', JSON.stringify(updatedProject, null, 2));
       await onSave(updatedProject);
       onClose();
     } catch (err) {
@@ -138,18 +136,19 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
   const [newProjectTitle, setNewProjectTitle] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [editingProject, setEditingProject] = useState<ProjectMetadata | null>(null);
-  const [showPovPlayer, setShowPovPlayer] = useState(false);
-  const [playingProject, setPlayingProject] = useState<ProjectMetadata | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const projectService = ProjectService.getInstance();
+  const [showPovPlayer, setShowPovPlayer] = useState(false);
+  const [povFile, setPovFile] = useState<any>(null);
+
+  const projectService = useRef(ProjectService.getInstance());
+  const povExportService = useRef(PovExportService.getInstance());
 
   const loadProjects = async () => {
     try {
       setLoading(true);
       setError(null);
       console.log('Loading projects...');
-      const projectService = await ProjectService.getInstance();
-      const projects = await projectService.getProjectList();
+      const projects = await projectService.current.getProjectList();
       console.log('Projects loaded:', projects);
       setProjects(projects);
     } catch (error) {
@@ -166,13 +165,13 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
 
   const handleCreateProject = async () => {
     if (!newProjectTitle.trim()) {
-      setError('Title is required');
+      setError('Le titre est requis');
       return;
     }
 
     try {
       console.log('Creating project with title:', newProjectTitle);
-      const projectId = await projectService.createProject(
+      const projectId = await projectService.current.createProject(
         newProjectTitle,
         newProjectDescription
       );
@@ -189,24 +188,23 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
       onProjectSelect(projectId);
     } catch (error) {
       console.error('Error creating project:', error);
-      setError('Failed to create project');
+      setError('Erreur lors de la création du projet');
     }
   };
 
   const handleDeleteProject = async (projectId: string) => {
     try {
-      await projectService.deleteProject(projectId);
+      await projectService.current.deleteProject(projectId);
       await loadProjects();
     } catch (error) {
       console.error('Error deleting project:', error);
-      setError('Failed to delete project');
+      setError('Erreur lors de la suppression du projet');
     }
   };
 
   const handleUpdateMetadata = async (updatedProject: ProjectMetadata) => {
     try {
       console.log('Updating project metadata:', updatedProject);
-      const projectService = await ProjectService.getInstance();
       
       // Créer la structure correcte du projet pour la mise à jour
       const projectToUpdate = {
@@ -217,8 +215,8 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
         }
       };
       
-      console.log('Sending update with structure:', JSON.stringify(projectToUpdate, null, 2));
-      await projectService.updateProjectMetadata(projectToUpdate);
+      console.log('Sending update with structure:', projectToUpdate);
+      await projectService.current.updateProjectMetadata(projectToUpdate);
       console.log('Metadata updated, reloading projects...');
       await loadProjects();
     } catch (error) {
@@ -251,20 +249,10 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
         project.nodes = nodes;
         project.edges = edges;
         await projectService.saveProject(project);
-        
-        // setSnackbar({
-        //   open: true,
-        //   message: 'Projet importé avec succès',
-        //   severity: 'success'
-        // });
       }
     } catch (error) {
       console.error('Error importing POV:', error);
-      // setSnackbar({
-      //   open: true,
-      //   message: 'Erreur lors de l\'import du projet',
-      //   severity: 'error'
-      // });
+      setError('Erreur lors de l\'import du fichier POV');
     }
 
     // Reset input
@@ -273,20 +261,21 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
 
   const handlePlayScenario = async (project: ProjectMetadata) => {
     try {
-      const projectService = await ProjectService.getInstance();
-      const fullProject = await projectService.loadProject(project.projectId);
+      console.log('Loading project:', project.projectId);
+      const fullProject = await projectService.current.loadProject(project.projectId);
       if (!fullProject) {
         throw new Error('Projet non trouvé');
       }
       
-      const povService = PovExportService.getInstance();
-      await povService.exportScenario(
+      console.log('Project loaded:', fullProject);
+      const povFile = await povExportService.current.exportScenario(
         fullProject.scenario?.scenarioTitle || 'Sans titre',
         fullProject.nodes || [],
         fullProject.edges || []
       );
-      
-      setPlayingProject(fullProject);
+      console.log('POV file created:', povFile);
+
+      setPovFile(povFile);
       setShowPovPlayer(true);
     } catch (error) {
       console.error('Error playing scenario:', error);
@@ -296,6 +285,17 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* PovPlayer Modal */}
+      {showPovPlayer && povFile && (
+        <PovPlayer
+          scenario={povFile}
+          onClose={() => {
+            setShowPovPlayer(false);
+            setPovFile(null);
+          }}
+        />
+      )}
+
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h4" component="h1">
           Bibliothèque de Projets
@@ -376,18 +376,18 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
       )}
 
       <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)}>
-        <DialogTitle>Create New Scenario</DialogTitle>
+        <DialogTitle>Nouveau Projet</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
             margin="dense"
-            label="Title"
+            label="Titre"
             fullWidth
             value={newProjectTitle}
             onChange={(e) => setNewProjectTitle(e.target.value)}
             onKeyPress={handleKeyPress}
-            error={error === 'Title is required'}
-            helperText={error === 'Title is required' ? 'Title is required' : ''}
+            error={error === 'Le titre est requis'}
+            helperText={error === 'Le titre est requis' ? 'Le titre est requis' : ''}
           />
           <TextField
             margin="dense"
@@ -400,14 +400,14 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setCreateDialogOpen(false)}>Annuler</Button>
           <Button 
             onClick={handleCreateProject} 
             variant="contained" 
             color="primary"
             disabled={!newProjectTitle.trim()}
           >
-            Create
+            Créer
           </Button>
         </DialogActions>
       </Dialog>
@@ -419,25 +419,6 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
           onClose={() => setEditingProject(null)}
           onSave={handleUpdateMetadata}
         />
-      )}
-
-      {showPovPlayer && playingProject && (
-        <Dialog
-          open={showPovPlayer}
-          onClose={() => setShowPovPlayer(false)}
-          maxWidth="lg"
-          fullWidth
-        >
-          <DialogTitle>
-            {playingProject.scenario?.scenarioTitle || 'Sans titre'}
-          </DialogTitle>
-          <DialogContent>
-            <PovPlayer
-              scenario={playingProject}
-              onClose={() => setShowPovPlayer(false)}
-            />
-          </DialogContent>
-        </Dialog>
       )}
     </Container>
   );
