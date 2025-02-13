@@ -273,16 +273,19 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
     event.target.value = '';
   }, []);
 
-  const handlePlayScenario = async (projectId: string) => {
+  const handlePlayScenario = async (project: ProjectMetadata) => {
     try {
-      console.log('Loading project:', projectId);
-      const project = await projectService.current.loadProject(projectId);
-      console.log('Project loaded:', project);
-
+      console.log('Loading project:', project.projectId);
+      const fullProject = await projectService.current.loadProject(project.projectId);
+      if (!fullProject) {
+        throw new Error('Projet non trouvé');
+      }
+      
+      console.log('Project loaded:', fullProject);
       const povFile = await povExportService.current.exportScenario(
-        project.title || 'Untitled',
-        project.nodes || [],
-        project.edges || []
+        fullProject.scenario?.scenarioTitle || 'Sans titre',
+        fullProject.nodes || [],
+        fullProject.edges || []
       );
       console.log('POV file created:', povFile);
 
@@ -290,6 +293,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
       setShowPovPlayer(true);
     } catch (error) {
       console.error('Error playing scenario:', error);
+      setError('Erreur lors du lancement du scénario');
     }
   };
 
@@ -352,6 +356,13 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
               <CardActions>
                 <IconButton
                   size="small"
+                  onClick={() => handlePlayScenario(project)}
+                  title="Lancer le scénario"
+                >
+                  <PlayArrowIcon />
+                </IconButton>
+                <IconButton
+                  size="small"
                   onClick={() => onProjectSelect(project.projectId)}
                   title="Ouvrir"
                 >
@@ -370,13 +381,6 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
                   title="Supprimer"
                 >
                   <DeleteIcon />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  title="Lire"
-                  onClick={() => handlePlayScenario(project.projectId)}
-                >
-                  <PlayArrowIcon />
                 </IconButton>
               </CardActions>
             </Card>
