@@ -22,7 +22,7 @@ import {
 import {
   Delete as DeleteIcon,
   Add as AddIcon,
-  Help as HelpIcon,
+  OpenInNew as OpenInNewIcon,
   Edit as EditIcon,
   PlayArrow as PlayArrowIcon,
   Image as ImageIcon,
@@ -189,9 +189,9 @@ const ProjectCard: React.FC<{
           size="small" 
           onClick={onSelect}
           color="primary"
-          title="Éditer"
+          title="Ouvrir"
         >
-          <HelpIcon />
+          <OpenInNewIcon />
         </IconButton>
         <IconButton 
           size="small" 
