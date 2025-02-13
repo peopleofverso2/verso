@@ -574,26 +574,6 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
             <Background />
             <Controls />
           </ReactFlow>
-          
-          {/* Bouton de lecture POV */}
-          <Box
-            sx={{
-              position: 'absolute',
-              bottom: 20,
-              right: 20,
-              zIndex: 10
-            }}
-          >
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<PlayArrowIcon />}
-              onClick={handlePlayScenario}
-              disabled={nodes.length === 0}
-            >
-              Play Scenario
-            </Button>
-          </Box>
         </div>
 
         <Sidebar
