@@ -348,6 +348,10 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
         id: getId(),
         type,
         position,
+        style: {
+          width: 280,
+          height: type === 'mediaNode' ? 200 : 320,
+        },
         data: { 
           label: type === 'mediaNode' ? 'Media Node' : `${type} node`,
           onDataChange: handleNodeDataChange,
@@ -490,28 +494,41 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
       
       try {
         console.log('Loading project:', projectId);
-        const loadedProject = await projectService.loadProject(projectId);
+        const loadedProject = await projectService.getProject(projectId);
         if (loadedProject && isSubscribed) {
           console.log('Project loaded:', loadedProject);
-          setProject(loadedProject);
           
-          // Mise à jour des nœuds avec les callbacks
-          const nodesWithCallbacks = loadedProject.nodes.map(node => ({
+          // Ajouter les callbacks et tailles par défaut aux nœuds
+          const nodesWithCallbacks = loadedProject.nodes.map((node: Node) => ({
             ...node,
+            style: {
+              ...node.style,
+              width: node.style?.width || 280,
+              height: node.style?.height || (node.type === 'mediaNode' ? 200 : 320),
+            },
             data: {
               ...node.data,
               onDataChange: handleNodeDataChange,
               onVideoEnd,
               onChoiceSelect: handleChoiceSelect,
               getConnectedNodeId: (buttonId: string) => getConnectedNodeId(node.id, buttonId),
+              isPlaybackMode: false,
+              isCurrentNode: false,
+              isPlaying: false,
             },
           }));
-          
+
+          setProject(loadedProject);
           setNodes(nodesWithCallbacks);
-          setEdges(loadedProject.edges);
+          setEdges(loadedProject.edges || []);
         }
       } catch (error) {
         console.error('Error loading project:', error);
+        setSnackbar({
+          open: true,
+          message: 'Error loading project',
+          severity: 'error'
+        });
       }
     };
 
@@ -519,7 +536,7 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
     return () => {
       isSubscribed = false;
     };
-  }, [projectId]); // Ne dépend que de projectId
+  }, [projectId, handleNodeDataChange, onVideoEnd, handleChoiceSelect, getConnectedNodeId]);
 
   // Sauvegarder lors des changements de nœuds ou d'arêtes
   useEffect(() => {
