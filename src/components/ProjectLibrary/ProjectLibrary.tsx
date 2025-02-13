@@ -145,6 +145,32 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
   const projectService = useRef(ProjectService.getInstance());
   const povExportService = useRef(PovExportService.getInstance());
 
+  const [mediaLibrary] = useState(() => MediaLibraryService.getInstance());
+
+  const getMediaUrl = useCallback(async (mediaId: string) => {
+    try {
+      const media = await (await mediaLibrary).getMedia(mediaId);
+      return media.url;
+    } catch (error) {
+      console.error('Error getting media URL:', error);
+      return '';
+    }
+  }, [mediaLibrary]);
+
+  const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    projects.forEach(async (project) => {
+      if (project.scenario?.coverImage && !mediaUrls[project.scenario.coverImage]) {
+        const url = await getMediaUrl(project.scenario.coverImage);
+        setMediaUrls(prev => ({
+          ...prev,
+          [project.scenario.coverImage]: url
+        }));
+      }
+    });
+  }, [projects, getMediaUrl]);
+
   const loadProjects = async () => {
     try {
       setLoading(true);
@@ -256,7 +282,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
 
       // Stocker l'image via MediaLibraryService
       const mediaLibrary = await MediaLibraryService.getInstance();
-      const mediaFile = await mediaLibrary.saveMedia(file, mediaMetadata);
+      const mediaFile = await mediaLibrary.uploadMedia(file, mediaMetadata);
       
       // Mettre à jour les métadonnées du projet
       const updatedProject = {
@@ -387,7 +413,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
                 position: 'relative',
                 minHeight: '200px',
                 backgroundImage: project.scenario?.coverImage ? 
-                  `url(${MediaLibraryService.getInstance().getMediaUrl(project.scenario.coverImage)})` : 
+                  `url(${mediaUrls[project.scenario.coverImage] || ''})` : 
                   'none',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
