@@ -34,7 +34,7 @@ import { ProjectMetadata } from '../../types/project';
 import ProjectList from '../ProjectList/ProjectList';
 import { PovExportService } from '../../services/povExportService';
 import PovPlayer from '../Player/PovPlayer';
-import { LocalStorageAdapter } from '../../services/storage/LocalStorageAdapter';
+import { MediaLibraryService } from '../../services/mediaLibraryService';
 
 interface ProjectLibraryProps {
   onProjectSelect: (projectId: string) => void;
@@ -242,17 +242,28 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
         return;
       }
 
-      // Stocker l'image
-      const storage = LocalStorageAdapter.getInstance();
-      const imageId = `project-cover-${project.projectId}`;
-      await storage.saveFile(imageId, file);
+      // Créer les métadonnées du média
+      const mediaMetadata: MediaMetadata = {
+        id: `project-cover-${project.projectId}`,
+        type: 'image',
+        mimeType: file.type,
+        name: file.name,
+        size: file.size,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        tags: ['project-cover']
+      };
+
+      // Stocker l'image via MediaLibraryService
+      const mediaLibrary = await MediaLibraryService.getInstance();
+      const mediaFile = await mediaLibrary.saveMedia(file, mediaMetadata);
       
       // Mettre à jour les métadonnées du projet
       const updatedProject = {
         ...project,
         scenario: {
           ...project.scenario,
-          coverImage: imageId
+          coverImage: mediaFile.id
         }
       };
       
@@ -375,7 +386,9 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
                 flexDirection: 'column',
                 position: 'relative',
                 minHeight: '200px',
-                backgroundImage: project.scenario?.coverImage ? `url(${LocalStorageAdapter.getInstance().getFileUrl(project.scenario.coverImage)})` : 'none',
+                backgroundImage: project.scenario?.coverImage ? 
+                  `url(${MediaLibraryService.getInstance().getMediaUrl(project.scenario.coverImage)})` : 
+                  'none',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 '&::before': project.scenario?.coverImage ? {
