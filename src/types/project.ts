@@ -56,8 +56,13 @@ export interface Project {
 
 export interface ProjectMetadata {
   projectId: string;
-  scenarioTitle: string;
-  description: string;
+  scenario?: {
+    scenarioTitle?: string;
+    description?: string;
+    coverImageId?: string;
+    thumbnails?: string[];
+    tags?: string[];
+  };
   createdAt: string;
   updatedAt: string;
 }
