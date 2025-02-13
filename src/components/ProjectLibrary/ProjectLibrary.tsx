@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Button,
@@ -25,12 +25,14 @@ import {
   CloudDownload as CloudDownloadIcon,
   GetApp as GetAppIcon,
   OpenInNew as OpenInNewIcon,
+  PlayArrow as PlayArrowIcon,
 } from '@mui/icons-material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { ProjectService } from '../../services/projectService';
 import { ProjectMetadata } from '../../types/project';
 import ProjectList from '../ProjectList/ProjectList';
 import { PovExportService } from '../../services/povExportService';
+import PovPlayer from '../Player/PovPlayer';
 
 interface ProjectLibraryProps {
   onProjectSelect: (projectId: string) => void;
@@ -137,7 +139,11 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [editingProject, setEditingProject] = useState<ProjectMetadata | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const projectService = ProjectService.getInstance();
+  const [showPovPlayer, setShowPovPlayer] = useState(false);
+  const [povFile, setPovFile] = useState<any>(null);
+
+  const projectService = useRef(ProjectService.getInstance());
+  const povExportService = useRef(PovExportService.getInstance());
 
   const loadProjects = async () => {
     try {
@@ -168,7 +174,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
 
     try {
       console.log('Creating project with title:', newProjectTitle);
-      const projectId = await projectService.createProject(
+      const projectId = await projectService.current.createProject(
         newProjectTitle,
         newProjectDescription
       );
@@ -191,7 +197,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
 
   const handleDeleteProject = async (projectId: string) => {
     try {
-      await projectService.deleteProject(projectId);
+      await projectService.current.deleteProject(projectId);
       await loadProjects();
     } catch (error) {
       console.error('Error deleting project:', error);
@@ -267,8 +273,38 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
     event.target.value = '';
   }, []);
 
+  const handlePlayScenario = async (projectId: string) => {
+    try {
+      console.log('Loading project:', projectId);
+      const project = await projectService.current.loadProject(projectId);
+      console.log('Project loaded:', project);
+
+      const povFile = await povExportService.current.exportScenario(
+        project.title || 'Untitled',
+        project.nodes || [],
+        project.edges || []
+      );
+      console.log('POV file created:', povFile);
+
+      setPovFile(povFile);
+      setShowPovPlayer(true);
+    } catch (error) {
+      console.error('Error playing scenario:', error);
+    }
+  };
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* PovPlayer Modal */}
+      {showPovPlayer && povFile && (
+        <PovPlayer
+          scenario={povFile}
+          onClose={() => {
+            setShowPovPlayer(false);
+            setPovFile(null);
+          }}
+        />
+      )}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h4" component="h1">
           Bibliothèque de Projets
@@ -334,6 +370,13 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
                   title="Supprimer"
                 >
                   <DeleteIcon />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  title="Lire"
+                  onClick={() => handlePlayScenario(project.projectId)}
+                >
+                  <PlayArrowIcon />
                 </IconButton>
               </CardActions>
             </Card>
