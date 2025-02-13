@@ -17,11 +17,12 @@ import {
   CardActions,
   Grid,
   Skeleton,
+  Chip
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
   Add as AddIcon,
-  Edit as EditIcon,
+  Help as HelpIcon,
   PlayArrow as PlayArrowIcon,
   Image as ImageIcon,
 } from '@mui/icons-material';
@@ -43,7 +44,8 @@ const ProjectCard: React.FC<{
   onDelete?: () => void;
   onPlay: () => void;
   onImageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-}> = ({ project, onSelect, onDelete, onPlay, onImageChange }) => {
+  onEdit: () => void;
+}> = ({ project, onSelect, onDelete, onPlay, onImageChange, onEdit }) => {
   const [coverUrl, setCoverUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const mediaLibraryRef = useRef<MediaLibraryService | null>(null);
@@ -135,9 +137,35 @@ const ProjectCard: React.FC<{
             display: '-webkit-box',
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
+            mb: 1
           }}>
             {project.scenario.description}
           </Typography>
+        )}
+        {project.scenario?.tags && project.scenario.tags.length > 0 && (
+          <Box sx={{ 
+            display: 'flex', 
+            flexWrap: 'wrap', 
+            gap: 0.5,
+            mt: 'auto'
+          }}>
+            {project.scenario.tags.map((tag) => (
+              <Chip
+                key={tag}
+                label={`#${tag}`}
+                size="small"
+                color="primary"
+                variant="outlined"
+                sx={{ 
+                  height: 24,
+                  '& .MuiChip-label': {
+                    px: 1,
+                    fontSize: '0.75rem'
+                  }
+                }}
+              />
+            ))}
+          </Box>
         )}
       </CardContent>
 
@@ -162,7 +190,7 @@ const ProjectCard: React.FC<{
           color="primary"
           title="Éditer"
         >
-          <EditIcon />
+          <HelpIcon />
         </IconButton>
         <IconButton 
           size="small" 
@@ -182,6 +210,14 @@ const ProjectCard: React.FC<{
             <DeleteIcon />
           </IconButton>
         )}
+        <IconButton 
+          size="small" 
+          onClick={onEdit}
+          color="primary"
+          title="Éditer"
+        >
+          <HelpIcon />
+        </IconButton>
       </CardActions>
     </Card>
   );
@@ -192,10 +228,17 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
   onProjectDelete
 }) => {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToEdit, setProjectToEdit] = useState<ProjectMetadata | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
   const [newProjectTitle, setNewProjectTitle] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
+  const [newProjectTags, setNewProjectTags] = useState<string[]>([]);
   const [projectsList, setProjectsList] = useState<ProjectMetadata[]>([]);
   const [uiError, setUiError] = useState<string | null>(null);
   const [povFile, setPovFile] = useState<any>(null);
@@ -220,14 +263,34 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
 
   const handleCreateProject = async () => {
     try {
-      const projectId = await createProject(newProjectTitle, newProjectDescription);
+      const projectId = await createProject({
+        scenarioTitle: newProjectTitle,
+        description: newProjectDescription,
+        tags: newProjectTags
+      });
       setCreateDialogOpen(false);
       setNewProjectTitle('');
       setNewProjectDescription('');
+      setNewProjectTags([]);
       onProjectSelect(projectId);
     } catch (error) {
       console.error('Error creating project:', error);
+      setUiError('Erreur lors de la création du projet');
     }
+  };
+
+  const handleAddTag = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter' && tagInput.trim()) {
+      const newTag = tagInput.trim().toLowerCase();
+      if (!newProjectTags.includes(newTag)) {
+        setNewProjectTags([...newProjectTags, newTag]);
+      }
+      setTagInput('');
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setNewProjectTags(newProjectTags.filter(tag => tag !== tagToRemove));
   };
 
   const handleUpdateCoverImage = async (projectId: string, file: File) => {
@@ -375,6 +438,67 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
     setDeleteDialogOpen(true);
   };
 
+  const handleEditRequest = (project: ProjectMetadata) => {
+    setProjectToEdit(project);
+    setEditTitle(project.scenario?.scenarioTitle || '');
+    setEditDescription(project.scenario?.description || '');
+    setEditTags(project.scenario?.tags || []);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!projectToEdit) return;
+
+    try {
+      const updatedMetadata = {
+        ...projectToEdit,
+        scenario: {
+          ...projectToEdit.scenario,
+          scenarioTitle: editTitle,
+          description: editDescription,
+          tags: editTags
+        }
+      };
+
+      await updateProjectMetadata(projectToEdit.projectId, updatedMetadata);
+
+      // Mettre à jour la liste locale
+      setProjectsList(projectsList.map(p => 
+        p.projectId === projectToEdit.projectId ? updatedMetadata : p
+      ));
+
+      setEditDialogOpen(false);
+      setProjectToEdit(null);
+    } catch (error) {
+      console.error('Error updating project:', error);
+      setUiError('Erreur lors de la mise à jour du projet');
+    }
+  };
+
+  const handleTagAdd = (event: React.KeyboardEvent<HTMLInputElement>, isEdit: boolean) => {
+    if (event.key === 'Enter' && tagInput.trim()) {
+      const newTag = tagInput.trim().toLowerCase();
+      if (isEdit) {
+        if (!editTags.includes(newTag)) {
+          setEditTags([...editTags, newTag]);
+        }
+      } else {
+        if (!newProjectTags.includes(newTag)) {
+          setNewProjectTags([...newProjectTags, newTag]);
+        }
+      }
+      setTagInput('');
+    }
+  };
+
+  const handleTagRemove = (tagToRemove: string, isEdit: boolean) => {
+    if (isEdit) {
+      setEditTags(editTags.filter(tag => tag !== tagToRemove));
+    } else {
+      setNewProjectTags(newProjectTags.filter(tag => tag !== tagToRemove));
+    }
+  };
+
   return (
     <Box sx={{ 
       height: '100vh',
@@ -420,6 +544,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
                 onDelete={() => handleDeleteRequest(project.projectId)}
                 onPlay={() => handlePlayScenario(project)}
                 onImageChange={(e) => handleCoverImageChange(e, project.projectId)}
+                onEdit={() => handleEditRequest(project)}
               />
             </Grid>
           ))}
@@ -458,11 +583,121 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
             value={newProjectDescription}
             onChange={(e) => setNewProjectDescription(e.target.value)}
           />
+          <Box sx={{ mt: 2 }}>
+            <TextField
+              fullWidth
+              label="Ajouter des hashtags"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => handleTagAdd(e, false)}
+              helperText="Appuyez sur Entrée pour ajouter un hashtag"
+            />
+            <Box sx={{ 
+              display: 'flex', 
+              flexWrap: 'wrap', 
+              gap: 1,
+              mt: 1 
+            }}>
+              {newProjectTags.map((tag) => (
+                <Chip
+                  key={tag}
+                  label={`#${tag}`}
+                  onDelete={() => handleTagRemove(tag, false)}
+                  color="primary"
+                  variant="outlined"
+                />
+              ))}
+            </Box>
+          </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)}>Annuler</Button>
-          <Button onClick={handleCreateProject} variant="contained" color="primary">
+          <Button onClick={() => {
+            setCreateDialogOpen(false);
+            setNewProjectTitle('');
+            setNewProjectDescription('');
+            setNewProjectTags([]);
+          }}>
+            Annuler
+          </Button>
+          <Button 
+            onClick={handleCreateProject}
+            variant="contained" 
+            color="primary"
+            disabled={!newProjectTitle.trim()}
+          >
             Créer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialogue d'édition */}
+      <Dialog 
+        open={editDialogOpen} 
+        onClose={() => {
+          setEditDialogOpen(false);
+          setProjectToEdit(null);
+        }}
+      >
+        <DialogTitle>Modifier le projet</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Titre du projet"
+            fullWidth
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+          />
+          <TextField
+            margin="dense"
+            label="Description"
+            fullWidth
+            multiline
+            rows={4}
+            value={editDescription}
+            onChange={(e) => setEditDescription(e.target.value)}
+          />
+          <Box sx={{ mt: 2 }}>
+            <TextField
+              fullWidth
+              label="Ajouter des hashtags"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => handleTagAdd(e, true)}
+              helperText="Appuyez sur Entrée pour ajouter un hashtag"
+            />
+            <Box sx={{ 
+              display: 'flex', 
+              flexWrap: 'wrap', 
+              gap: 1,
+              mt: 1 
+            }}>
+              {editTags.map((tag) => (
+                <Chip
+                  key={tag}
+                  label={`#${tag}`}
+                  onDelete={() => handleTagRemove(tag, true)}
+                  color="primary"
+                  variant="outlined"
+                />
+              ))}
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setEditDialogOpen(false);
+            setProjectToEdit(null);
+          }}>
+            Annuler
+          </Button>
+          <Button 
+            onClick={handleEditSave}
+            variant="contained" 
+            color="primary"
+            disabled={!editTitle.trim()}
+          >
+            Enregistrer
           </Button>
         </DialogActions>
       </Dialog>
