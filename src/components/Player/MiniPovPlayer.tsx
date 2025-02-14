@@ -7,15 +7,21 @@ interface MiniPovPlayerProps {
   scenario: {
     nodes: {
       id: string;
+      type?: string;
       data: {
         mediaId?: string;
         content?: {
-          videoUrl?: string;
-          video?: {
-            url?: string;
-          };
+          media?: Array<{
+            id: string;
+            type: string;
+          }>;
         };
       };
+    }[];
+    edges?: {
+      id: string;
+      source: string;
+      target: string;
     }[];
     media?: Record<string, MediaFile>;
   };
@@ -34,31 +40,71 @@ const MiniPovPlayer: React.FC<MiniPovPlayerProps> = ({
   const imageRef = useRef<HTMLImageElement>(null);
   const mediaLibrary = useRef<MediaLibraryService | null>(null);
 
+  // Initialiser MediaLibrary
   useEffect(() => {
-    MediaLibraryService.getInstance().then(lib => {
-      mediaLibrary.current = lib;
-    });
+    let mounted = true;
+
+    const initMediaLibrary = async () => {
+      try {
+        console.log('MiniPovPlayer: Initializing MediaLibrary...');
+        const lib = await MediaLibraryService.getInstance();
+        if (mounted) {
+          console.log('MiniPovPlayer: MediaLibrary initialized');
+          mediaLibrary.current = lib;
+        }
+      } catch (error) {
+        console.error('MiniPovPlayer: Error initializing MediaLibrary:', error);
+        setIsLoading(false);
+      }
+    };
+
+    initMediaLibrary();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
+  // Sélectionner le premier nœud avec média
   useEffect(() => {
-    // Commencer par le premier nœud
-    if (scenario?.nodes?.length > 0) {
-      console.log('Setting initial node:', scenario.nodes[0]);
-      setCurrentNodeId(scenario.nodes[0].id);
-    } else {
-      console.log('No nodes available in scenario:', scenario);
-    }
-  }, [scenario]);
+    if (!scenario?.nodes?.length || !mediaLibrary.current) return;
 
+    const findNodeWithMedia = () => {
+      for (const node of scenario.nodes) {
+        // Vérifier d'abord mediaId direct
+        if (node.data?.mediaId) {
+          console.log('MiniPovPlayer: Found node with direct mediaId:', node);
+          return node;
+        }
+        // Sinon vérifier dans content.media
+        if (node.data?.content?.media?.length > 0) {
+          console.log('MiniPovPlayer: Found node with media in content:', node);
+          return node;
+        }
+      }
+      return null;
+    };
+
+    const nodeWithMedia = findNodeWithMedia();
+    if (nodeWithMedia) {
+      setCurrentNodeId(nodeWithMedia.id);
+    } else {
+      console.log('MiniPovPlayer: No nodes with media found in:', scenario.nodes);
+      setIsLoading(false);
+    }
+  }, [scenario, mediaLibrary.current]);
+
+  // Charger le média
   useEffect(() => {
     const loadMedia = async () => {
       if (!currentNodeId || !scenario?.nodes || !mediaLibrary.current) {
-        console.log('Missing dependencies:', {
+        console.log('MiniPovPlayer: Missing dependencies:', {
           currentNodeId,
           hasScenario: !!scenario,
           hasNodes: !!scenario?.nodes,
           hasMediaLibrary: !!mediaLibrary.current
         });
+        setIsLoading(false);
         return;
       }
 
@@ -66,25 +112,54 @@ const MiniPovPlayer: React.FC<MiniPovPlayerProps> = ({
 
       try {
         const node = scenario.nodes.find(n => n.id === currentNodeId);
-        if (!node?.data?.mediaId) {
-          console.log('No media ID in node:', node);
+        if (!node) return;
+
+        console.log('MiniPovPlayer: Loading media for node:', node);
+
+        // Essayer d'abord mediaId direct
+        let mediaId = node.data?.mediaId;
+        let mediaType: 'video' | 'image' | null = null;
+
+        // Sinon chercher dans content.media
+        if (!mediaId && node.data?.content?.media?.length > 0) {
+          const firstMedia = node.data.content.media[0];
+          mediaId = firstMedia.id;
+          mediaType = firstMedia.type as 'video' | 'image';
+        }
+
+        if (!mediaId) {
+          console.log('MiniPovPlayer: No media ID found in node');
           setIsLoading(false);
           return;
         }
 
-        console.log('Loading media for node:', node);
+        console.log('MiniPovPlayer: Getting media:', { mediaId, mediaType });
 
-        const media = await mediaLibrary.current.getMedia(node.data.mediaId);
-        console.log('Media loaded:', media);
+        // Essayer d'abord de récupérer le média depuis le scénario
+        let media = scenario.media?.[mediaId];
+        
+        // Si pas trouvé, le charger depuis MediaLibrary
+        if (!media) {
+          console.log('MiniPovPlayer: Media not found in scenario, loading from library');
+          media = await mediaLibrary.current.getMedia(mediaId);
+        } else {
+          console.log('MiniPovPlayer: Media found in scenario');
+        }
+
+        console.log('MiniPovPlayer: Media loaded:', media);
 
         if (media?.url) {
           setMediaUrl(media.url);
-          setMediaType(media.metadata.type as 'video' | 'image');
+          setMediaType(mediaType || (media.metadata.type as 'video' | 'image'));
+          console.log('MiniPovPlayer: Media state updated');
+        } else {
+          console.log('MiniPovPlayer: No URL in media response');
         }
       } catch (error) {
-        console.error('Error loading media:', error);
+        console.error('MiniPovPlayer: Error loading media:', error);
       } finally {
         setIsLoading(false);
+        console.log('MiniPovPlayer: Loading finished');
       }
     };
 
@@ -92,6 +167,7 @@ const MiniPovPlayer: React.FC<MiniPovPlayerProps> = ({
 
     return () => {
       if (mediaUrl) {
+        console.log('MiniPovPlayer: Cleaning up URL:', mediaUrl);
         URL.revokeObjectURL(mediaUrl);
       }
     };

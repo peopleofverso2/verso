@@ -2,7 +2,7 @@ import { Project, ProjectMetadata } from '../types/project';
 
 const DB_NAME = 'verso_db';
 const STORE_NAME = 'projects';
-const DB_VERSION = 4; // Incrémenter la version pour forcer la mise à jour
+const DB_VERSION = 5; // Incrémenter la version pour forcer la mise à jour
 
 export class ProjectService {
   private db: IDBDatabase | null = null;
@@ -39,8 +39,9 @@ export class ProjectService {
         this.db.close();
         this.db = null;
       }
-      await deleteDB(DB_NAME);
+      await this.deleteDB(DB_NAME);
       console.log('Database deleted successfully');
+      this.initialized = false;
       await this.initialize();
     } catch (error) {
       console.error('Error resetting database:', error);
@@ -69,12 +70,20 @@ export class ProjectService {
           console.log('Database upgrade needed from version:', event.oldVersion, 'to:', event.newVersion);
           const db = request.result;
           
-          // Créer le store si nécessaire
+          // Créer le store des projets si nécessaire
           if (!db.objectStoreNames.contains(STORE_NAME)) {
-            console.log('Creating object store:', STORE_NAME);
+            console.log('Creating projects store');
             db.createObjectStore(STORE_NAME, { keyPath: 'projectId' });
-            console.log('Object store created with indexes');
           }
+
+          // Créer le store des médias si nécessaire
+          if (!db.objectStoreNames.contains('media')) {
+            console.log('Creating media store');
+            db.createObjectStore('media', { keyPath: 'id' });
+          }
+
+          // Vérifier que les stores sont bien créés
+          console.log('Available stores:', Array.from(db.objectStoreNames));
         };
       });
     }
@@ -155,18 +164,85 @@ export class ProjectService {
     try {
       console.log('Loading project:', projectId);
       const db = await this.getDB();
-      return new Promise((resolve, reject) => {
+
+      // D'abord, charger le projet
+      const project = await new Promise<Project | null>((resolve, reject) => {
         const transaction = db.transaction(STORE_NAME, 'readonly');
         const store = transaction.objectStore(STORE_NAME);
         const request = store.get(projectId);
 
         request.onsuccess = () => {
-          const project = request.result;
-          console.log('Project loaded:', project);
-          resolve(project || null);
+          resolve(request.result);
         };
         request.onerror = () => reject(request.error);
       });
+
+      if (!project) {
+        return null;
+      }
+
+      // Ensuite, collecter les mediaIds
+      const mediaIds = new Set<string>();
+      project.nodes?.forEach(node => {
+        if (node.data?.mediaId) {
+          mediaIds.add(node.data.mediaId);
+        }
+        if (node.data?.content?.media) {
+          node.data.content.media.forEach(media => {
+            mediaIds.add(media.id);
+          });
+        }
+      });
+
+      console.log('Loading media for project:', {
+        projectId,
+        mediaCount: mediaIds.size,
+        mediaIds: Array.from(mediaIds)
+      });
+
+      // Si nous avons des médias à charger et que le store media existe
+      if (mediaIds.size > 0 && db.objectStoreNames.contains('media')) {
+        try {
+          // Charger les médias dans une nouvelle transaction
+          const media = await new Promise((resolve, reject) => {
+            const mediaTransaction = db.transaction('media', 'readonly');
+            const mediaStore = mediaTransaction.objectStore('media');
+            const mediaPromises = Array.from(mediaIds).map(mediaId => 
+              new Promise((resolveMedia) => {
+                const mediaRequest = mediaStore.get(mediaId);
+                mediaRequest.onsuccess = () => resolveMedia({ id: mediaId, media: mediaRequest.result });
+                mediaRequest.onerror = () => resolveMedia({ id: mediaId, media: null });
+              })
+            );
+
+            // Attendre que tous les médias soient chargés
+            Promise.all(mediaPromises)
+              .then(mediaResults => {
+                const mediaMap = mediaResults.reduce((acc, { id, media }) => {
+                  if (media) {
+                    acc[id] = media;
+                  }
+                  return acc;
+                }, {});
+                resolve(mediaMap);
+              })
+              .catch(reject);
+
+            mediaTransaction.onerror = () => reject(mediaTransaction.error);
+          });
+
+          // Mettre à jour le projet avec les médias
+          project.media = media;
+        } catch (error) {
+          console.error('Error loading media:', error);
+          // Continue without media if there's an error
+        }
+      } else {
+        console.log('No media to load or media store not available');
+      }
+
+      console.log('Project loaded:', project);
+      return project;
     } catch (error) {
       console.error('Error loading project:', error);
       throw error;
@@ -221,39 +297,26 @@ export class ProjectService {
   }
 
   async getProjectList(): Promise<ProjectMetadata[]> {
-    await this.initialize();
-
-    if (!this.db) {
-      throw new Error('Database not initialized');
-    }
-
     try {
-      console.log('Getting project list');
-      const tx = this.db.transaction(STORE_NAME, 'readonly');
-      const store = tx.objectStore(STORE_NAME);
+      const db = await this.getDB();
+      const transaction = db.transaction([STORE_NAME], 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
       const request = store.getAll();
 
-      const projects = await new Promise<any[]>((resolve, reject) => {
+      return new Promise((resolve, reject) => {
         request.onerror = () => reject(request.error);
-        request.onsuccess = () => resolve(request.result);
+        request.onsuccess = () => {
+          const projects = request.result;
+          const projectMetadataList = projects.map(project => ({
+            projectId: project.projectId,
+            scenarioTitle: project.scenario?.scenarioTitle || 'Sans titre',
+            description: project.scenario?.description || '',
+            createdAt: project.createdAt,
+            updatedAt: project.updatedAt
+          }));
+          resolve(projectMetadataList);
+        };
       });
-
-      console.log('Raw projects:', projects);
-      
-      // Convertir en ProjectMetadata
-      const projectMetadata = projects.map(project => ({
-        projectId: project.projectId,
-        scenario: {
-          scenarioTitle: project.scenario?.scenarioTitle || 'Sans titre',
-          description: project.scenario?.description || ''
-        },
-        createdAt: project.createdAt,
-        updatedAt: project.updatedAt
-      }));
-
-      console.log('Project metadata with full structure:', projectMetadata);
-
-      return projectMetadata;
     } catch (error) {
       console.error('Error getting project list:', error);
       throw error;
@@ -428,5 +491,19 @@ export class ProjectService {
       console.error('Error updating project metadata:', error);
       throw error;
     }
+  }
+
+  private async deleteDB(dbName: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.deleteDatabase(dbName);
+      request.onerror = () => {
+        console.error('Error deleting database:', request.error);
+        reject(request.error);
+      };
+      request.onsuccess = () => {
+        console.log('Database deleted successfully');
+        resolve();
+      };
+    });
   }
 }

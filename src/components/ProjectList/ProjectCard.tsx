@@ -34,14 +34,22 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     const loadScenario = async () => {
       try {
         const projectService = ProjectService.getInstance();
+        console.log('ProjectCard: Loading project:', project.projectId);
+        
         const fullProject = await projectService.loadProject(project.projectId);
-        console.log('Loaded project for MiniPovPlayer:', fullProject);
+        console.log('ProjectCard: Project loaded:', {
+          projectId: project.projectId,
+          hasNodes: !!fullProject.nodes,
+          nodesCount: fullProject.nodes?.length,
+          hasMedia: !!fullProject.media,
+          mediaCount: Object.keys(fullProject.media || {}).length
+        });
         
         // Vérifier la structure du projet
         const hasValidNodes = fullProject.nodes?.length > 0;
         const hasValidMedia = fullProject.media && Object.keys(fullProject.media).length > 0;
         
-        console.log('Project validation:', {
+        console.log('ProjectCard: Project validation:', {
           hasValidNodes,
           hasValidMedia,
           nodesCount: fullProject.nodes?.length,
@@ -49,13 +57,20 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         });
 
         if (hasValidNodes || hasValidMedia) {
+          console.log('ProjectCard: Setting scenario state with:', {
+            nodes: fullProject.nodes?.length,
+            mediaCount: Object.keys(fullProject.media || {}).length
+          });
           setScenario({
             nodes: fullProject.nodes || [],
-            media: fullProject.media || {}
+            media: fullProject.media || {},
+            edges: fullProject.edges || []
           });
+        } else {
+          console.log('ProjectCard: Invalid project structure');
         }
       } catch (error) {
-        console.error('Error loading project:', error);
+        console.error('ProjectCard: Error loading project:', error);
       }
     };
 

@@ -41,6 +41,7 @@ import { MediaLibraryService } from '../../services/mediaLibraryService';
 import { LoginButton } from '../Auth/LoginButton';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import ProjectCard from '../ProjectList/ProjectCard';
 
 interface ProjectMetadataDialogProps {
   open: boolean;
@@ -184,9 +185,17 @@ export const ProjectLibrary: React.FC = () => {
       setLoading(true);
       setError(null);
       console.log('Loading projects...');
-      const projects = await projectService.current.getProjectList();
+      const projectService = ProjectService.getInstance();
+      const projects = await projectService.getProjectList();
       console.log('Projects loaded:', projects);
-      setProjects(projects);
+      setProjects(projects.map(project => ({
+        projectId: project.projectId,
+        scenarioTitle: project.scenario?.scenarioTitle || 'Sans titre',
+        description: project.scenario?.description || '',
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+        minimap: project.minimap
+      })));
     } catch (error) {
       console.error('Error loading projects:', error);
       setError('Erreur lors du chargement des projets');
@@ -438,114 +447,12 @@ export const ProjectLibrary: React.FC = () => {
       ) : (
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 2 }}>
           {projects.map((project) => (
-            <Card 
-              key={project.projectId} 
-              sx={{ 
-                display: 'flex', 
-                flexDirection: 'column',
-                position: 'relative',
-                minHeight: '200px',
-                backgroundImage: project.scenario?.coverImage ? 
-                  `url(${mediaUrls[project.scenario.coverImage] || ''})` : 
-                  'none',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                '&::before': project.scenario?.coverImage ? {
-                  content: '""',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                  zIndex: 1
-                } : {}
-              }}
-            >
-              <CardContent sx={{ 
-                flexGrow: 1,
-                position: 'relative',
-                zIndex: 2,
-                color: project.scenario?.coverImage ? 'white' : 'inherit'
-              }}>
-                <Typography variant="h6" component="div" gutterBottom>
-                  {project.scenario?.scenarioTitle || 'Sans titre'}
-                </Typography>
-                {project.scenario?.description && (
-                  <Typography 
-                    variant="body2" 
-                    color={project.scenario?.coverImage ? 'rgba(255, 255, 255, 0.7)' : 'text.secondary'} 
-                    gutterBottom
-                  >
-                    {project.scenario.description}
-                  </Typography>
-                )}
-                <Typography 
-                  variant="caption" 
-                  color={project.scenario?.coverImage ? 'rgba(255, 255, 255, 0.7)' : 'text.secondary'} 
-                  display="block"
-                >
-                  Créé le: {new Date(project.createdAt).toLocaleDateString()}
-                </Typography>
-                {project.updatedAt && project.updatedAt !== project.createdAt && (
-                  <Typography 
-                    variant="caption" 
-                    color={project.scenario?.coverImage ? 'rgba(255, 255, 255, 0.7)' : 'text.secondary'} 
-                    display="block"
-                  >
-                    Modifié le: {new Date(project.updatedAt).toLocaleDateString()}
-                  </Typography>
-                )}
-              </CardContent>
-              <CardActions sx={{ position: 'relative', zIndex: 2 }}>
-                <IconButton
-                  size="small"
-                  onClick={() => handlePlayScenario(project)}
-                  title="Lancer le scénario"
-                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
-                >
-                  <PlayArrowIcon />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => handleProjectSelect(project.projectId)}
-                  title="Ouvrir"
-                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
-                >
-                  <OpenInNewIcon />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => setEditingProject(project)}
-                  title="Modifier les métadonnées"
-                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
-                >
-                  <EditIcon />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  component="label"
-                  title="Changer l'image de couverture"
-                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
-                >
-                  <input
-                    type="file"
-                    hidden
-                    accept="image/*"
-                    onChange={(e) => handleCoverImageChange(e, project)}
-                  />
-                  <ImageIcon />
-                </IconButton>
-                <IconButton
-                  size="small"
-                  onClick={() => handleDeleteProject(project.projectId)}
-                  title="Supprimer"
-                  sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </CardActions>
-            </Card>
+            <ProjectCard
+              key={project.projectId}
+              project={project}
+              onProjectSelect={() => navigate(`/editor/${project.projectId}`)}
+              onProjectDelete={handleDeleteProject}
+            />
           ))}
         </Box>
       )}
