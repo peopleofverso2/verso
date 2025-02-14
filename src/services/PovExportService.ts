@@ -93,8 +93,24 @@ export class PovExportService {
 
     // Récupérer tous les médias
     const mediaPromises = Array.from(mediaIds).map(async id => {
-      const media = await this.mediaLibrary.getMedia(id);
-      return media;
+      try {
+        const media = await this.mediaLibrary.getMedia(id);
+        if (media) {
+          // Créer une nouvelle URL de blob pour le média
+          const response = await fetch(media.url);
+          const blob = await response.blob();
+          const newUrl = URL.createObjectURL(blob);
+          
+          return {
+            ...media,
+            url: newUrl
+          };
+        }
+        return null;
+      } catch (error) {
+        console.error(`Error loading media ${id}:`, error);
+        return null;
+      }
     });
 
     const mediaFiles = await Promise.all(mediaPromises);
@@ -104,7 +120,7 @@ export class PovExportService {
     const mediaMap: Record<string, MediaFile> = {};
     mediaFiles.forEach(media => {
       if (media) {
-        mediaMap[media.id] = media;
+        mediaMap[media.metadata.id] = media;
       }
     });
 

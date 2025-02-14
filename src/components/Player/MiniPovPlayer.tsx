@@ -36,9 +36,10 @@ const MiniPovPlayer: React.FC<MiniPovPlayerProps> = ({
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'video' | 'image' | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitializing, setIsInitializing] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
-  const mediaLibrary = useRef<MediaLibraryService | null>(null);
+  const [mediaLibrary, setMediaLibrary] = useState<MediaLibraryService | null>(null);
 
   // Initialiser MediaLibrary
   useEffect(() => {
@@ -50,11 +51,15 @@ const MiniPovPlayer: React.FC<MiniPovPlayerProps> = ({
         const lib = await MediaLibraryService.getInstance();
         if (mounted) {
           console.log('MiniPovPlayer: MediaLibrary initialized');
-          mediaLibrary.current = lib;
+          setMediaLibrary(lib);
+          setIsInitializing(false);
         }
       } catch (error) {
         console.error('MiniPovPlayer: Error initializing MediaLibrary:', error);
-        setIsLoading(false);
+        if (mounted) {
+          setIsInitializing(false);
+          setIsLoading(false);
+        }
       }
     };
 
@@ -67,7 +72,8 @@ const MiniPovPlayer: React.FC<MiniPovPlayerProps> = ({
 
   // Sélectionner le premier nœud avec média
   useEffect(() => {
-    if (!scenario?.nodes?.length || !mediaLibrary.current) return;
+    if (isInitializing) return;
+    if (!scenario?.nodes?.length || !mediaLibrary) return;
 
     const findNodeWithMedia = () => {
       for (const node of scenario.nodes) {
@@ -92,17 +98,17 @@ const MiniPovPlayer: React.FC<MiniPovPlayerProps> = ({
       console.log('MiniPovPlayer: No nodes with media found in:', scenario.nodes);
       setIsLoading(false);
     }
-  }, [scenario, mediaLibrary.current]);
+  }, [scenario, mediaLibrary, isInitializing]);
 
   // Charger le média
   useEffect(() => {
     const loadMedia = async () => {
-      if (!currentNodeId || !scenario?.nodes || !mediaLibrary.current) {
+      if (!currentNodeId || !scenario?.nodes || !mediaLibrary) {
         console.log('MiniPovPlayer: Missing dependencies:', {
           currentNodeId,
           hasScenario: !!scenario,
           hasNodes: !!scenario?.nodes,
-          hasMediaLibrary: !!mediaLibrary.current
+          hasMediaLibrary: !!mediaLibrary
         });
         setIsLoading(false);
         return;
@@ -141,7 +147,7 @@ const MiniPovPlayer: React.FC<MiniPovPlayerProps> = ({
         // Si pas trouvé, le charger depuis MediaLibrary
         if (!media) {
           console.log('MiniPovPlayer: Media not found in scenario, loading from library');
-          media = await mediaLibrary.current.getMedia(mediaId);
+          media = await mediaLibrary.getMedia(mediaId);
         } else {
           console.log('MiniPovPlayer: Media found in scenario');
         }

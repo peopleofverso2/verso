@@ -46,15 +46,41 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
   const [mediaEnded, setMediaEnded] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [mediaType, setMediaType] = useState<'video' | 'image' | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const audioContainerRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout>();
-  const mediaLibrary = useRef(MediaLibraryService.getInstance());
+  const [mediaLibrary, setMediaLibrary] = useState<MediaLibraryService | null>(null);
+
+  // Initialiser MediaLibraryService
+  useEffect(() => {
+    let mounted = true;
+    const initMediaLibrary = async () => {
+      try {
+        const instance = await MediaLibraryService.getInstance();
+        if (mounted) {
+          setMediaLibrary(instance);
+          setIsInitializing(false);
+        }
+      } catch (error) {
+        console.error('Failed to initialize MediaLibrary:', error);
+        if (mounted) {
+          setIsInitializing(false);
+        }
+      }
+    };
+    initMediaLibrary();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Trouver le premier nœud
   useEffect(() => {
+    if (isInitializing) return;
+    
     if (!scenario || !scenario.nodes || !Array.isArray(scenario.nodes)) {
       console.error('Invalid scenario structure:', scenario);
       return;
@@ -64,7 +90,7 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
       const startNode = scenario.nodes[0];
       setCurrentNodeId(startNode.id);
     }
-  }, [scenario]);
+  }, [scenario, isInitializing]);
 
   // Trouver le nœud suivant en fonction des edges
   const findNextNode = useCallback((currentNodeId: string, handleId?: string) => {
@@ -104,10 +130,20 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
   // Charger le média du nœud actuel
   useEffect(() => {
     const loadMedia = async () => {
-      if (!currentNodeId || !scenario || !scenario.nodes || !mediaLibrary.current) return;
+      if (!currentNodeId || !scenario || !scenario.nodes) {
+        console.error('Missing required data:', {
+          currentNodeId,
+          hasScenario: !!scenario,
+          hasNodes: !!scenario?.nodes
+        });
+        return;
+      }
 
       const node = scenario.nodes.find(n => n.id === currentNodeId);
-      if (!node || !node.data) return;
+      if (!node || !node.data) {
+        console.error('Node not found or invalid:', { currentNodeId, node });
+        return;
+      }
 
       setMediaEnded(false);
       setIsPaused(false);
@@ -116,12 +152,18 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
       // Récupérer l'URL du média et son type
       let url = null;
       let type = null;
+      
       if (node.data.mediaId && scenario.media?.[node.data.mediaId]) {
         const mediaFile = scenario.media[node.data.mediaId];
-        if (mediaFile.url) {
+        if (mediaFile?.url) {
           url = mediaFile.url;
           type = mediaFile.metadata.type as 'video' | 'image';
+          console.log('Media loaded from scenario:', { mediaId: node.data.mediaId, type });
         }
+      }
+
+      if (!url) {
+        console.warn('No media URL found for node:', { nodeId: node.id, mediaId: node.data.mediaId });
       }
 
       setMediaUrl(url);
@@ -146,191 +188,64 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
 
       // Configurer l'audio si présent
       if (node.data.audioId && scenario.media?.[node.data.audioId]) {
-        console.log('Audio ID found:', node.data.audioId);
         const audioFile = scenario.media[node.data.audioId];
         console.log('Audio file:', audioFile);
         
         if (audioFile.url && audioFile.metadata?.mimeType?.startsWith('audio/') && audioContainerRef.current) {
           console.log('Setting audio source:', audioFile.url);
-          
-          // Nettoyer l'ancien audio s'il existe
           if (audioRef.current) {
-            stopAndCleanupAudio(audioRef.current);
+            audioRef.current.src = audioFile.url;
+            audioRef.current.load();
           }
-          
-          // Créer un nouvel élément audio
-          const newAudio = new Audio();
-          newAudio.style.display = 'none';
-          newAudio.crossOrigin = 'anonymous';
-          newAudio.preload = 'auto';
-          
-          // Configurer les gestionnaires d'événements avant de définir la source
-          newAudio.addEventListener('error', (e) => {
-            console.error('Audio error event:', e);
-            console.error('Audio error code:', newAudio.error?.code);
-            console.error('Audio error message:', newAudio.error?.message);
-            
-            // Réessayer le chargement en cas d'erreur
-            if (newAudio.error?.code !== MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
-              setTimeout(() => {
-                newAudio.load();
-                newAudio.play().catch(console.error);
-              }, 1000);
-            }
-          });
-
-          newAudio.addEventListener('loadeddata', () => {
-            console.log('Audio loaded successfully');
-          });
-
-          newAudio.addEventListener('playing', () => {
-            console.log('Audio started playing');
-          });
-          
-          // Définir la source et ajouter au conteneur dédié
-          newAudio.src = audioFile.url;
-          audioContainerRef.current.appendChild(newAudio);
-          audioRef.current = newAudio;
-          
-          const audio = node.data.content?.audio;
-          console.log('Audio settings:', audio);
-          
-          if (audio) {
-            newAudio.volume = audio.volume ?? 1;
-            newAudio.loop = audio.loop ?? false;
-            console.log('Audio volume:', newAudio.volume);
-            console.log('Audio loop:', newAudio.loop);
-
-            // Appliquer le fade-in
-            if (audio.fadeIn) {
-              console.log('Applying fade-in:', audio.fadeIn);
-              newAudio.volume = 0;
-              const steps = 50;
-              const stepTime = (audio.fadeIn * 1000) / steps;
-              const volumeStep = (audio.volume ?? 1) / steps;
-
-              let currentStep = 0;
-              const fadeInterval = setInterval(() => {
-                currentStep++;
-                if (newAudio && currentStep <= steps) {
-                  newAudio.volume = volumeStep * currentStep;
-                  console.log('Fade-in step:', currentStep, 'volume:', newAudio.volume);
-                } else {
-                  clearInterval(fadeInterval);
-                }
-              }, stepTime);
-            }
-
-            // Démarrer la lecture audio avec gestion d'erreur détaillée
-            newAudio.play().then(() => {
-              console.log('Audio started playing successfully');
-            }).catch(error => {
-              console.error('Error playing audio:', error);
-              if (error.name === 'NotAllowedError') {
-                console.error('Audio playback was not allowed. This might be due to browser autoplay restrictions.');
-                // Ajouter un gestionnaire de clic pour démarrer l'audio
-                const startAudio = () => {
-                  newAudio.play().catch(console.error);
-                  document.removeEventListener('click', startAudio);
-                };
-                document.addEventListener('click', startAudio);
-              } else if (error.name === 'NotSupportedError') {
-                console.error('Audio format is not supported.');
-              }
-            });
-          }
-        } else {
-          console.log('Invalid audio file or MIME type:', { 
-            hasUrl: !!audioFile.url, 
-            mimeType: audioFile.metadata?.mimeType 
-          });
         }
       } else {
-        console.log('No audio ID found for node:', node.data);
+        console.log('No audio ID found for node:', node);
       }
 
-      // Trouver les choix disponibles
-      const nodeChoices = node.data.content?.choices || [];
-      const edges = scenario.edges?.filter(e => e.source === currentNodeId) || [];
-      
-      const availableChoices = nodeChoices.map(choice => {
-        const edge = edges.find(e => e.sourceHandle === `button-handle-${choice.id}`);
-        if (!edge) return null;
-        
-        return {
-          id: choice.id,
-          text: choice.text,
-          targetId: edge.target,
-          handleId: edge.sourceHandle || ''
-        };
-      }).filter((choice): choice is { id: string; text: string; targetId: string; handleId: string } => choice !== null);
-
-      // Si pas de choix mais un lien simple, créer un choix "Continuer"
-      if (availableChoices.length === 0 && edges.length === 1 && !edges[0].sourceHandle) {
-        availableChoices.push({
-          id: 'continue',
-          text: 'Continuer',
-          targetId: edges[0].target,
-          handleId: ''
+      // Configurer les choix
+      if (node.data.content?.choices) {
+        const choicesWithTargets = node.data.content.choices.map(choice => {
+          const handleId = `button-handle-${choice.id}`;
+          const targetId = findNextNode(currentNodeId, handleId);
+          return {
+            ...choice,
+            targetId,
+            handleId
+          };
         });
+        setChoices(choicesWithTargets);
+      } else {
+        setChoices([]);
       }
-
-      setChoices(availableChoices);
     };
 
     loadMedia();
-
-    // Nettoyer
-    return () => {
-      clearTimers();
-      if (mediaUrl?.startsWith('blob:')) {
-        URL.revokeObjectURL(mediaUrl);
-      }
-      if (audioRef.current) {
-        const audio = audioRef.current;
-        
-        // Appliquer le fade-out avant de stopper
-        const node = scenario.nodes.find(n => n.id === currentNodeId);
-        const fadeOut = node?.data.content?.audio?.fadeOut;
-        
-        if (fadeOut && audio.volume > 0) {
-          const currentVolume = audio.volume;
-          const steps = 50;
-          const stepTime = (fadeOut * 1000) / steps;
-          const volumeStep = currentVolume / steps;
-
-          let currentStep = 0;
-          const fadeInterval = setInterval(() => {
-            currentStep++;
-            if (currentStep <= steps) {
-              audio.volume = currentVolume - (volumeStep * currentStep);
-            } else {
-              clearInterval(fadeInterval);
-              stopAndCleanupAudio(audio);
-            }
-          }, stepTime);
-        } else {
-          stopAndCleanupAudio(audio);
-        }
-      }
-    };
-  }, [currentNodeId, scenario, clearTimers, findNextNode, handleTransition]);
+  }, [currentNodeId, scenario, clearTimers, findNextNode]);
 
   // Fonction utilitaire pour arrêter et nettoyer l'audio
   const stopAndCleanupAudio = useCallback((audio: HTMLAudioElement) => {
     try {
+      // Arrêter la lecture et les effets de fondu
       audio.pause();
-      audio.src = '';
-      audio.load(); // Force la libération des ressources
       
-      // Supprimer tous les gestionnaires d'événements
+      // Supprimer les gestionnaires d'événements
       const clone = audio.cloneNode(false);
       if (audio.parentNode && clone instanceof HTMLAudioElement) {
         audio.parentNode.replaceChild(clone, audio);
       }
       
+      // Nettoyer la source et forcer la libération des ressources
+      audio.src = '';
+      audio.load();
+      
+      // Supprimer l'élément du DOM
       if (audio.parentNode) {
         audio.parentNode.removeChild(audio);
+      }
+      
+      // Révoquer l'URL du blob si nécessaire
+      if (audio.src.startsWith('blob:')) {
+        URL.revokeObjectURL(audio.src);
       }
     } catch (error) {
       console.error('Error cleaning up audio:', error);
@@ -345,9 +260,9 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
     document.body.appendChild(container);
     audioContainerRef.current = container;
 
+    // Nettoyer le conteneur audio au démontage
     return () => {
       if (audioContainerRef.current) {
-        // S'assurer que tous les éléments audio sont nettoyés
         const audioElements = audioContainerRef.current.getElementsByTagName('audio');
         Array.from(audioElements).forEach(audio => {
           stopAndCleanupAudio(audio);
@@ -355,7 +270,7 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
         audioContainerRef.current.remove();
       }
     };
-  }, []);
+  }, [stopAndCleanupAudio]);
 
   // Gérer la fin du média
   const handleMediaEnd = useCallback(() => {
@@ -404,6 +319,28 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
     }
   }, [handleTransition]);
 
+  // Nettoyer les ressources à la fermeture
+  useEffect(() => {
+    return () => {
+      clearTimers();
+      if (mediaUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(mediaUrl);
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+      // Nettoyer les URLs de blob dans le scénario
+      if (scenario?.media) {
+        Object.values(scenario.media).forEach(media => {
+          if (media.url?.startsWith('blob:')) {
+            URL.revokeObjectURL(media.url);
+          }
+        });
+      }
+    };
+  }, [clearTimers, mediaUrl, scenario]);
+
   return (
     <Box
       sx={{
@@ -439,7 +376,10 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
           width: '100%', 
           maxWidth: '1280px', 
           aspectRatio: '16/9',
-          position: 'relative'  
+          position: 'relative',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
         }}>
           {mediaType === 'video' ? (
             <video
@@ -451,6 +391,20 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
               onEnded={handleMediaEnd}
               onPause={handlePause}
               onPlay={handlePlay}
+              onError={(e) => {
+                console.error('Video error:', e);
+                const video = e.currentTarget;
+                if (video.error) {
+                  console.error('Video error details:', {
+                    code: video.error.code,
+                    message: video.error.message
+                  });
+                }
+              }}
+              onLoadedData={() => {
+                console.log('Video loaded successfully');
+              }}
+              crossOrigin="anonymous"
             />
           ) : mediaType === 'image' ? (
             <img
@@ -458,6 +412,15 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
               src={mediaUrl}
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
               alt="Contenu du nœud"
+              onError={(e) => {
+                console.error('Image error:', e);
+                // En cas d'erreur, on peut afficher une image par défaut
+                e.currentTarget.src = '/path/to/fallback/image.png';
+              }}
+              onLoad={() => {
+                console.log('Image loaded successfully');
+              }}
+              crossOrigin="anonymous"
             />
           ) : null}
         </Box>

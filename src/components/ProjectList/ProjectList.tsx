@@ -1,5 +1,5 @@
 import React from 'react';
-import { Grid, Typography, Paper } from '@mui/material';
+import { Grid, Typography, Box } from '@mui/material';
 import { ProjectMetadata } from '../../types/project';
 import ProjectCard from './ProjectCard';
 
@@ -16,16 +16,30 @@ const ProjectList: React.FC<ProjectListProps> = ({
 }) => {
   if (projects.length === 0) {
     return (
-      <Paper sx={{ p: 3, textAlign: 'center' }}>
+      <Box sx={{ 
+        p: 3, 
+        textAlign: 'center',
+        bgcolor: 'background.paper',
+        borderRadius: 1,
+        boxShadow: 1
+      }}>
         <Typography variant="body1" color="text.secondary">
           No scenarios yet. Create your first one!
         </Typography>
-      </Paper>
+      </Box>
     );
   }
 
   return (
-    <Grid container spacing={3}>
+    <Grid 
+      container 
+      spacing={3}
+      sx={{ 
+        p: 2,
+        m: -2, // Pour compenser le padding et aligner avec les bords
+        width: 'auto'
+      }}
+    >
       {projects.map((project) => (
         <Grid item xs={12} sm={6} md={4} key={project.projectId}>
           <ProjectCard
