@@ -15,7 +15,9 @@ import {
   Card,
   CardContent,
   CardActions,
-  CircularProgress
+  CircularProgress,
+  AppBar,
+  Toolbar
 } from '@mui/material';
 import {
   Delete as DeleteIcon,
@@ -35,6 +37,8 @@ import ProjectList from '../ProjectList/ProjectList';
 import { PovExportService } from '../../services/povExportService';
 import PovPlayer from '../Player/PovPlayer';
 import { MediaLibraryService } from '../../services/mediaLibraryService';
+import { LoginButton } from '../Auth/LoginButton';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ProjectLibraryProps {
   onProjectSelect: (projectId: string) => void;
@@ -132,6 +136,7 @@ const ProjectMetadataDialog: React.FC<ProjectMetadataDialogProps> = ({
 };
 
 const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProjectDelete }) => {
+  const { user } = useAuth();
   const [projects, setProjects] = useState<ProjectMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -387,6 +392,15 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
           }}
         />
       )}
+
+      <AppBar position="static" sx={{ mb: 3 }}>
+        <Toolbar>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+            Verso Project Library
+          </Typography>
+          <LoginButton />
+        </Toolbar>
+      </AppBar>
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h4" component="h1">
