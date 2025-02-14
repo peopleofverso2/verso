@@ -36,7 +36,7 @@ interface PovPlayerProps {
     }[];
     media?: Record<string, MediaFile>;
   };
-  onClose: () => void;
+  onClose?: () => void;
 }
 
 const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
@@ -404,6 +404,18 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
     }
   }, [handleTransition]);
 
+  // Gérer la touche Escape
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <Box
       sx={{
@@ -420,18 +432,20 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
         zIndex: 9999
       }}
     >
-      <IconButton
-        onClick={onClose}
-        sx={{
-          position: 'absolute',
-          top: 16,
-          right: 16,
-          color: 'white',
-          zIndex: 10000
-        }}
-      >
-        <CloseIcon />
-      </IconButton>
+      {onClose && (
+        <IconButton
+          onClick={onClose}
+          sx={{
+            position: 'absolute',
+            top: 16,
+            right: 16,
+            color: 'white',
+            zIndex: 10000
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
+      )}
 
       {/* Conteneur du média */}
       {mediaUrl && (

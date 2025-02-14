@@ -2,26 +2,31 @@ import React from 'react';
 import {
   Card,
   CardContent,
+  CardActions,
   Typography,
   IconButton,
   Box,
-  Tooltip,
-  CardActionArea,
   CircularProgress,
+  CardActionArea,
+  Dialog,
+  Slide,
 } from '@mui/material';
+import { TransitionProps } from '@mui/material/transitions';
 import {
-  Edit as EditIcon,
   Delete as DeleteIcon,
+  PlayArrow as PlayArrowIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { ProjectMetadata } from '../../types/project';
 import { ProjectService } from '../../services/projectService';
-import { MediaLibraryService } from '../../services/mediaLibraryService';
+import { MediaLibraryService } from '../../services/MediaLibraryService';
 import MiniPovPlayer from '../Player/MiniPovPlayer';
+import PovPlayer from '../Player/PovPlayer';
 
 interface ProjectCardProps {
   project: ProjectMetadata;
-  onProjectSelect: (projectId: string) => void;
-  onProjectDelete?: (projectId: string) => void;
+  onProjectSelect: (id: string) => void;
+  onProjectDelete: (id: string) => void;
 }
 
 const ProjectCard: React.FC<ProjectCardProps> = ({
@@ -32,6 +37,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const [scenario, setScenario] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isHovered, setIsHovered] = React.useState(false);
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
   const mediaLibrary = React.useRef<MediaLibraryService | null>(null);
   const [isMediaLibraryReady, setIsMediaLibraryReady] = React.useState(false);
 
@@ -151,13 +157,22 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
 
   // Gérer le hover
   const handleMouseEnter = () => {
-    console.log('ProjectCard: Mouse enter');
     setIsHovered(true);
   };
 
   const handleMouseLeave = () => {
-    console.log('ProjectCard: Mouse leave');
     setIsHovered(false);
+  };
+
+  // Lancer le scénario en plein écran
+  const handlePlayScenario = (event: React.MouseEvent) => {
+    event.stopPropagation(); // Empêcher la propagation au CardActionArea
+    setIsFullscreen(true);
+  };
+
+  // Fermer le plein écran
+  const handleCloseFullscreen = () => {
+    setIsFullscreen(false);
   };
 
   const formatDate = (dateString: string) => {
@@ -171,85 +186,115 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   };
 
   return (
-    <Card>
-      <CardActionArea 
-        onClick={() => onProjectSelect(project.projectId)}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-      >
-        <Box sx={{ height: 140, bgcolor: 'background.paper' }}>
-          {isLoading ? (
-            <Box
-              sx={{
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                bgcolor: 'action.hover'
-              }}
-            >
-              <CircularProgress size={24} />
-            </Box>
-          ) : scenario ? (
-            <MiniPovPlayer scenario={scenario} isHovered={isHovered} />
-          ) : (
-            <Box
-              sx={{
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                bgcolor: 'action.hover'
-              }}
-            >
-              <Typography variant="body2" color="text.secondary">
-                Aucun média disponible
-              </Typography>
-            </Box>
-          )}
-        </Box>
-        
-        <CardContent>
-          <Typography variant="h6" component="h2" gutterBottom noWrap>
-            {project.scenarioTitle}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Created: {formatDate(project.createdAt)}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Modified: {formatDate(project.updatedAt)}
-          </Typography>
-        </CardContent>
-      </CardActionArea>
-
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1, borderTop: 1, borderColor: 'divider' }}>
-        <Tooltip title="Edit">
-          <IconButton 
-            size="small" 
+    <>
+      <Card>
+        <CardActionArea 
+          onClick={() => onProjectSelect(project.projectId)}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <Box sx={{ height: 140, bgcolor: 'background.paper', position: 'relative' }}>
+            {isLoading ? (
+              <Box
+                sx={{
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: 'action.hover'
+                }}
+              >
+                <CircularProgress size={24} />
+              </Box>
+            ) : scenario ? (
+              <>
+                <MiniPovPlayer scenario={scenario} isHovered={isHovered} />
+                {isHovered && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      zIndex: 1,
+                    }}
+                  >
+                    <IconButton
+                      onClick={handlePlayScenario}
+                      sx={{
+                        bgcolor: 'rgba(0, 0, 0, 0.5)',
+                        '&:hover': {
+                          bgcolor: 'rgba(0, 0, 0, 0.7)',
+                        },
+                        color: 'white',
+                      }}
+                    >
+                      <PlayArrowIcon fontSize="large" />
+                    </IconButton>
+                  </Box>
+                )}
+              </>
+            ) : (
+              <Box
+                sx={{
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: 'action.hover'
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  Aucun média disponible
+                </Typography>
+              </Box>
+            )}
+          </Box>
+          <CardContent>
+            <Typography gutterBottom variant="h6" component="div">
+              {project.title || 'Sans titre'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Modifié le {formatDate(project.updatedAt)}
+            </Typography>
+          </CardContent>
+        </CardActionArea>
+        <CardActions>
+          <IconButton
+            size="small"
             onClick={(e) => {
               e.stopPropagation();
-              onProjectSelect(project.projectId);
+              onProjectDelete(project.projectId);
             }}
           >
-            <EditIcon />
+            <DeleteIcon />
           </IconButton>
-        </Tooltip>
-        {onProjectDelete && (
-          <Tooltip title="Delete">
-            <IconButton 
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                onProjectDelete(project.projectId);
-              }}
-            >
-              <DeleteIcon />
-            </IconButton>
-          </Tooltip>
-        )}
-      </Box>
-    </Card>
+        </CardActions>
+      </Card>
+
+      {/* Dialog pour le plein écran */}
+      <Dialog
+        fullScreen
+        open={isFullscreen}
+        onClose={handleCloseFullscreen}
+        TransitionComponent={Transition}
+      >
+        <Box sx={{ height: '100%', bgcolor: 'black' }}>
+          {scenario && <PovPlayer scenario={scenario} onClose={handleCloseFullscreen} />}
+        </Box>
+      </Dialog>
+    </>
   );
 };
+
+// Transition pour le dialog
+const Transition = React.forwardRef(function Transition(
+  props: TransitionProps & {
+    children: React.ReactElement;
+  },
+  ref: React.Ref<unknown>,
+) {
+  return <Slide direction="up" ref={ref} {...props} />;
+});
 
 export default ProjectCard;
