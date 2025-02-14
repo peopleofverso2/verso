@@ -6,6 +6,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ProjectLibrary } from './components/ProjectLibrary/ProjectLibrary';
 import { ScenarioEditor } from './components/Editor/ScenarioEditor';
 import { ConfigPage } from './components/Settings/ConfigPage';
+import { ProtectedRoute } from './components/Auth/ProtectedRoute';
 
 const App: React.FC = () => {
   return (
@@ -16,8 +17,22 @@ const App: React.FC = () => {
           <Container maxWidth={false} disableGutters sx={{ height: '100vh', overflow: 'hidden' }}>
             <Routes>
               <Route path="/" element={<ProjectLibrary />} />
-              <Route path="/editor/:projectId" element={<ScenarioEditor />} />
-              <Route path="/settings" element={<ConfigPage />} />
+              <Route 
+                path="/editor/:projectId" 
+                element={
+                  <ProtectedRoute>
+                    <ScenarioEditor />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/settings" 
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <ConfigPage />
+                  </ProtectedRoute>
+                } 
+              />
             </Routes>
           </Container>
         </Router>
