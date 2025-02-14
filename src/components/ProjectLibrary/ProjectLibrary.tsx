@@ -29,6 +29,7 @@ import {
   OpenInNew as OpenInNewIcon,
   PlayArrow as PlayArrowIcon,
   Image as ImageIcon,
+  Settings as SettingsIcon
 } from '@mui/icons-material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { ProjectService } from '../../services/projectService';
@@ -39,6 +40,7 @@ import PovPlayer from '../Player/PovPlayer';
 import { MediaLibraryService } from '../../services/mediaLibraryService';
 import { LoginButton } from '../Auth/LoginButton';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface ProjectLibraryProps {
   onProjectSelect: (projectId: string) => void;
@@ -137,6 +139,7 @@ const ProjectMetadataDialog: React.FC<ProjectMetadataDialogProps> = ({
 
 const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProjectDelete }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -398,7 +401,16 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Verso Project Library
           </Typography>
-          <LoginButton />
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <IconButton
+              color="inherit"
+              onClick={() => navigate('/settings')}
+              title="Settings"
+            >
+              <SettingsIcon />
+            </IconButton>
+            <LoginButton />
+          </Box>
         </Toolbar>
       </AppBar>
 
