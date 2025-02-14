@@ -8,14 +8,17 @@ import {
   Tooltip,
   CardActionArea,
   CircularProgress,
+  Dialog,
 } from '@mui/material';
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
+  PlayArrow as PlayArrowIcon,
 } from '@mui/icons-material';
 import { ProjectMetadata } from '../../types/project';
 import { ProjectService } from '../../services/projectService';
 import MiniPovPlayer from '../Player/MiniPovPlayer';
+import PovPlayer from '../Player/PovPlayer';
 
 interface ProjectCardProps {
   project: ProjectMetadata;
@@ -29,6 +32,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   onProjectDelete,
 }) => {
   const [scenario, setScenario] = React.useState<any>(null);
+  const [isPlaying, setIsPlaying] = React.useState(false);
 
   React.useEffect(() => {
     const loadScenario = async () => {
@@ -53,21 +57,21 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
           hasValidNodes,
           hasValidMedia,
           nodesCount: fullProject.nodes?.length,
-          mediaCount: Object.keys(fullProject.media || {}).length
+          mediaCount: Object.keys(fullProject.media || {}).length,
+          media: fullProject.media
         });
 
-        if (hasValidNodes || hasValidMedia) {
+        if (hasValidNodes) {
           console.log('ProjectCard: Setting scenario state with:', {
-            nodes: fullProject.nodes?.length,
-            mediaCount: Object.keys(fullProject.media || {}).length
+            nodes: fullProject.nodes.length,
+            mediaCount: Object.keys(fullProject.media || {}).length,
+            media: fullProject.media
           });
           setScenario({
-            nodes: fullProject.nodes || [],
-            media: fullProject.media || {},
-            edges: fullProject.edges || []
+            nodes: fullProject.nodes,
+            edges: fullProject.edges || [],
+            media: fullProject.media || {}
           });
-        } else {
-          console.log('ProjectCard: Invalid project structure');
         }
       } catch (error) {
         console.error('ProjectCard: Error loading project:', error);
@@ -76,6 +80,15 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
 
     loadScenario();
   }, [project.projectId]);
+
+  const handlePlayClick = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    setIsPlaying(true);
+  };
+
+  const handleClose = () => {
+    setIsPlaying(false);
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('fr-FR', {
@@ -88,66 +101,92 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   };
 
   return (
-    <Card>
-      <CardActionArea onClick={() => onProjectSelect(project.projectId)}>
-        <Box sx={{ height: 140, bgcolor: 'background.paper' }}>
-          {scenario ? (
-            <MiniPovPlayer scenario={scenario} />
-          ) : (
-            <Box
+    <>
+      <Card sx={{ minWidth: 275, maxWidth: 345, m: 1 }}>
+        <Box sx={{ position: 'relative' }}>
+          <CardActionArea onClick={() => onProjectSelect(project.projectId)}>
+            <CardContent>
+              <Box sx={{ position: 'relative', minHeight: 200 }}>
+                {scenario ? (
+                  <MiniPovPlayer scenario={scenario} />
+                ) : (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      minHeight: 200,
+                    }}
+                  >
+                    <CircularProgress />
+                  </Box>
+                )}
+              </Box>
+              <Typography variant="h6" component="div">
+                {project.scenarioTitle}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Created: {formatDate(project.createdAt)}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Modified: {formatDate(project.updatedAt)}
+              </Typography>
+            </CardContent>
+          </CardActionArea>
+          {scenario && (
+            <IconButton
               sx={{
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                bgcolor: 'action.hover'
+                position: 'absolute',
+                bottom: 72,
+                right: 8,
+                backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                '&:hover': {
+                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                },
+                zIndex: 1,
               }}
+              onClick={handlePlayClick}
             >
-              <CircularProgress size={24} />
-            </Box>
+              <PlayArrowIcon sx={{ color: 'white' }} />
+            </IconButton>
           )}
         </Box>
-        
-        <CardContent>
-          <Typography variant="h6" component="h2" gutterBottom noWrap>
-            {project.scenarioTitle}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Created: {formatDate(project.createdAt)}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Modified: {formatDate(project.updatedAt)}
-          </Typography>
-        </CardContent>
-      </CardActionArea>
-
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1, borderTop: 1, borderColor: 'divider' }}>
-        <Tooltip title="Edit">
-          <IconButton 
-            size="small" 
-            onClick={(e) => {
-              e.stopPropagation();
-              onProjectSelect(project.projectId);
-            }}
-          >
-            <EditIcon />
-          </IconButton>
-        </Tooltip>
-        {onProjectDelete && (
-          <Tooltip title="Delete">
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1, borderTop: 1, borderColor: 'divider' }}>
+          <Tooltip title="Edit">
             <IconButton 
-              size="small"
+              size="small" 
               onClick={(e) => {
                 e.stopPropagation();
-                onProjectDelete(project.projectId);
+                onProjectSelect(project.projectId);
               }}
             >
-              <DeleteIcon />
+              <EditIcon />
             </IconButton>
           </Tooltip>
-        )}
-      </Box>
-    </Card>
+          {onProjectDelete && (
+            <Tooltip title="Delete">
+              <IconButton 
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onProjectDelete(project.projectId);
+                }}
+              >
+                <DeleteIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+      </Card>
+
+      <Dialog
+        fullScreen
+        open={isPlaying}
+        onClose={handleClose}
+      >
+        {scenario && <PovPlayer scenario={scenario} onClose={handleClose} />}
+      </Dialog>
+    </>
   );
 };
 

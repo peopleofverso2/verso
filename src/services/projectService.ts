@@ -187,6 +187,9 @@ export class ProjectService {
         if (node.data?.mediaId) {
           mediaIds.add(node.data.mediaId);
         }
+        if (node.data?.audioId) {
+          mediaIds.add(node.data.audioId);
+        }
         if (node.data?.content?.media) {
           node.data.content.media.forEach(media => {
             mediaIds.add(media.id);
@@ -210,8 +213,19 @@ export class ProjectService {
             const mediaPromises = Array.from(mediaIds).map(mediaId => 
               new Promise((resolveMedia) => {
                 const mediaRequest = mediaStore.get(mediaId);
-                mediaRequest.onsuccess = () => resolveMedia({ id: mediaId, media: mediaRequest.result });
-                mediaRequest.onerror = () => resolveMedia({ id: mediaId, media: null });
+                mediaRequest.onsuccess = () => {
+                  const mediaData = mediaRequest.result;
+                  if (mediaData) {
+                    console.log('Media loaded:', { id: mediaId, type: mediaData.metadata?.type });
+                  } else {
+                    console.warn('Media not found:', mediaId);
+                  }
+                  resolveMedia({ id: mediaId, media: mediaData });
+                };
+                mediaRequest.onerror = () => {
+                  console.error('Error loading media:', mediaId);
+                  resolveMedia({ id: mediaId, media: null });
+                };
               })
             );
 
@@ -224,21 +238,36 @@ export class ProjectService {
                   }
                   return acc;
                 }, {});
+                console.log('All media loaded:', {
+                  count: Object.keys(mediaMap).length,
+                  mediaIds: Object.keys(mediaMap)
+                });
                 resolve(mediaMap);
               })
-              .catch(reject);
+              .catch(error => {
+                console.error('Error loading media:', error);
+                reject(error);
+              });
 
-            mediaTransaction.onerror = () => reject(mediaTransaction.error);
+            mediaTransaction.onerror = () => {
+              console.error('Media transaction error:', mediaTransaction.error);
+              reject(mediaTransaction.error);
+            };
           });
 
           // Mettre à jour le projet avec les médias
           project.media = media;
+          console.log('Project updated with media:', {
+            mediaCount: Object.keys(project.media).length,
+            mediaIds: Object.keys(project.media)
+          });
         } catch (error) {
           console.error('Error loading media:', error);
-          // Continue without media if there's an error
+          project.media = {};
         }
       } else {
         console.log('No media to load or media store not available');
+        project.media = {};
       }
 
       console.log('Project loaded:', project);
