@@ -1,8 +1,8 @@
 import { 
   GoogleAuthProvider, 
   signInWithPopup, 
-  signOut, 
-  onAuthStateChanged,
+  signOut as firebaseSignOut,
+  onAuthStateChanged as firebaseOnAuthStateChanged,
   User
 } from 'firebase/auth';
 import { auth } from './firebaseConfig';
@@ -20,8 +20,12 @@ class AuthService {
   private authStateListeners: ((user: AuthUser | null) => void)[] = [];
 
   private constructor() {
-    onAuthStateChanged(auth, (user) => {
-      this.currentUser = user ? this.formatUser(user) : null;
+    firebaseOnAuthStateChanged(auth, (user) => {
+      if (user) {
+        this.currentUser = this.formatUser(user);
+      } else {
+        this.currentUser = null;
+      }
       this.notifyListeners();
     });
   }
@@ -33,34 +37,32 @@ class AuthService {
     return AuthService.instance;
   }
 
+  private notifyListeners() {
+    this.authStateListeners.forEach(listener => listener(this.currentUser));
+  }
+
   private formatUser(user: User): AuthUser {
     return {
       uid: user.uid,
       email: user.email,
       displayName: user.displayName,
-      photoURL: user.photoURL
+      photoURL: user.photoURL,
     };
   }
 
-  private notifyListeners() {
-    this.authStateListeners.forEach(listener => listener(this.currentUser));
-  }
-
-  private getErrorMessage(error: any): string {
-    if (!error) return 'An unknown error occurred';
+  onAuthStateChanged(callback: (user: AuthUser | null) => void): () => void {
+    this.authStateListeners.push(callback);
     
-    switch (error.code) {
-      case 'auth/operation-not-allowed':
-        return 'Google sign-in is not enabled. Please contact the administrator.';
-      case 'auth/popup-blocked':
-        return 'The sign-in popup was blocked. Please allow popups for this site.';
-      case 'auth/popup-closed-by-user':
-        return 'The sign-in was cancelled.';
-      case 'auth/unauthorized-domain':
-        return 'This domain is not authorized for sign-in. Please contact the administrator.';
-      default:
-        return error.message || 'Failed to sign in. Please try again.';
-    }
+    // Appeler immédiatement avec l'état actuel
+    callback(this.currentUser);
+    
+    // Retourner une fonction de nettoyage
+    return () => {
+      const index = this.authStateListeners.indexOf(callback);
+      if (index > -1) {
+        this.authStateListeners.splice(index, 1);
+      }
+    };
   }
 
   async signInWithGoogle(): Promise<AuthUser> {
@@ -72,36 +74,22 @@ class AuthService {
       console.log('Sign in successful:', result.user.email);
       return this.formatUser(result.user);
     } catch (error: any) {
-      const errorMessage = this.getErrorMessage(error);
       console.error('Error signing in with Google:', {
         code: error.code,
-        message: errorMessage,
+        message: error.message,
         email: error.email,
         credential: error.credential
       });
-      throw new Error(errorMessage);
-    }
-  }
-
-  async signOut(): Promise<void> {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error('Error signing out:', error);
       throw error;
     }
   }
 
-  getCurrentUser(): AuthUser | null {
-    return this.currentUser;
+  async signOut(): Promise<void> {
+    await firebaseSignOut(auth);
   }
 
-  onAuthStateChange(listener: (user: AuthUser | null) => void): () => void {
-    this.authStateListeners.push(listener);
-    // Return unsubscribe function
-    return () => {
-      this.authStateListeners = this.authStateListeners.filter(l => l !== listener);
-    };
+  getCurrentUser(): AuthUser | null {
+    return this.currentUser;
   }
 
   isAuthenticated(): boolean {
