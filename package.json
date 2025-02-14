@@ -16,6 +16,7 @@
     "@mui/icons-material": "^6.4.3",
     "@mui/material": "^6.4.3",
     "@types/react-color": "^3.0.13",
+    "@types/react-router-dom": "^5.3.3",
     "@types/uuid": "^10.0.0",
     "adm-zip": "^0.5.16",
     "archiver": "^7.0.1",
@@ -31,6 +32,7 @@
     "react-draggable": "^4.4.6",
     "react-i18next": "^15.4.0",
     "react-player": "^2.16.0",
+    "react-router-dom": "^6.29.0",
     "reactflow": "^11.11.4",
     "uuid": "^11.0.5"
   },

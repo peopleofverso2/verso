@@ -7,7 +7,7 @@ import { ProjectLibrary } from './components/ProjectLibrary/ProjectLibrary';
 import { ScenarioEditor } from './components/Editor/ScenarioEditor';
 import { ConfigPage } from './components/Settings/ConfigPage';
 
-function App() {
+const App: React.FC = () => {
   return (
     <AuthProvider>
       <ThemeProvider theme={theme}>
@@ -24,6 +24,6 @@ function App() {
       </ThemeProvider>
     </AuthProvider>
   );
-}
+};
 
 export default App;
