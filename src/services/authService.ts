@@ -46,14 +46,40 @@ class AuthService {
     this.authStateListeners.forEach(listener => listener(this.currentUser));
   }
 
+  private getErrorMessage(error: any): string {
+    if (!error) return 'An unknown error occurred';
+    
+    switch (error.code) {
+      case 'auth/operation-not-allowed':
+        return 'Google sign-in is not enabled. Please contact the administrator.';
+      case 'auth/popup-blocked':
+        return 'The sign-in popup was blocked. Please allow popups for this site.';
+      case 'auth/popup-closed-by-user':
+        return 'The sign-in was cancelled.';
+      case 'auth/unauthorized-domain':
+        return 'This domain is not authorized for sign-in. Please contact the administrator.';
+      default:
+        return error.message || 'Failed to sign in. Please try again.';
+    }
+  }
+
   async signInWithGoogle(): Promise<AuthUser> {
     try {
+      console.log('Starting Google sign in...');
       const provider = new GoogleAuthProvider();
+      console.log('Provider created');
       const result = await signInWithPopup(auth, provider);
+      console.log('Sign in successful:', result.user.email);
       return this.formatUser(result.user);
-    } catch (error) {
-      console.error('Error signing in with Google:', error);
-      throw error;
+    } catch (error: any) {
+      const errorMessage = this.getErrorMessage(error);
+      console.error('Error signing in with Google:', {
+        code: error.code,
+        message: errorMessage,
+        email: error.email,
+        credential: error.credential
+      });
+      throw new Error(errorMessage);
     }
   }
 
