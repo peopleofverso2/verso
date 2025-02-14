@@ -240,10 +240,14 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
   const [newProjectTitle, setNewProjectTitle] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [newProjectTags, setNewProjectTags] = useState<string[]>([]);
+  const [newTagInput, setNewTagInput] = useState('');
   const [projectsList, setProjectsList] = useState<ProjectMetadata[]>([]);
   const [uiError, setUiError] = useState<string | null>(null);
   const [povFile, setPovFile] = useState<any>(null);
   const [showPovPlayer, setShowPovPlayer] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [allTags, setAllTags] = useState<string[]>([]);
 
   const {
     projects,
@@ -262,36 +266,93 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
   const projectService = useRef(ProjectService.getInstance());
   const mediaLibraryRef = useRef<MediaLibraryService | null>(null);
 
+  // Charger tous les projets et extraire les tags uniques
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const projects = await projectService.current.getAllProjects();
+        setProjectsList(projects);
+        
+        // Extraire tous les tags uniques des projets
+        const uniqueTags = Array.from(new Set(
+          projects.flatMap(project => project.scenario?.tags || [])
+        )).sort();
+        setAllTags(uniqueTags);
+      } catch (error) {
+        console.error('Error loading projects:', error);
+        setUiError('Failed to load projects');
+      }
+    };
+    loadProjects();
+  }, []);
+
+  // Filtrer les projets par recherche et tags
+  const filteredProjects = projectsList.filter(project => {
+    if (!searchQuery && selectedTags.length === 0) return true;
+    
+    const searchTerm = searchQuery.toLowerCase();
+    
+    // Recherche dans les tags
+    const matchesProjectTags = project.scenario?.tags?.some(tag => 
+      tag.toLowerCase().includes(searchTerm)
+    );
+    
+    // Recherche dans le titre et la description
+    const matchesTitle = project.scenario?.scenarioTitle?.toLowerCase().includes(searchTerm);
+    const matchesDescription = project.scenario?.description?.toLowerCase().includes(searchTerm);
+    
+    // Tags sélectionnés dans l'interface
+    const matchesSelectedTags = selectedTags.length === 0 || 
+      selectedTags.every(tag => project.scenario?.tags?.includes(tag));
+    
+    return (matchesProjectTags || matchesTitle || matchesDescription) && matchesSelectedTags;
+  });
+
+  // Gérer la sélection/déselection des tags
+  const handleTagToggle = (tag: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tag)
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    );
+  };
+
   const handleCreateProject = async () => {
     try {
       const projectId = await createProject({
         scenarioTitle: newProjectTitle,
         description: newProjectDescription,
-        tags: newProjectTags
+        scenario: {
+          scenarioTitle: newProjectTitle,
+          description: newProjectDescription,
+          tags: newProjectTags
+        }
       });
-      setCreateDialogOpen(false);
+      
       setNewProjectTitle('');
       setNewProjectDescription('');
       setNewProjectTags([]);
-      onProjectSelect(projectId);
+      setNewTagInput('');
+      setCreateDialogOpen(false);
+      
+      if (projectId) {
+        onProjectSelect(projectId);
+      }
     } catch (error) {
       console.error('Error creating project:', error);
-      setUiError('Erreur lors de la création du projet');
+      setUiError('Failed to create project');
     }
   };
 
-  const handleAddTag = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter' && tagInput.trim()) {
-      const newTag = tagInput.trim().toLowerCase();
-      if (!newProjectTags.includes(newTag)) {
-        setNewProjectTags([...newProjectTags, newTag]);
-      }
-      setTagInput('');
+  const handleAddTag = () => {
+    if (newTagInput.trim() && !newProjectTags.includes(newTagInput.trim())) {
+      setNewProjectTags(prev => [...prev, newTagInput.trim()]);
+      setNewTagInput('');
     }
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
-    setNewProjectTags(newProjectTags.filter(tag => tag !== tagToRemove));
+    setNewProjectTags(prev => prev.filter(tag => tag !== tagToRemove));
   };
 
   const handleUpdateCoverImage = async (projectId: string, file: File) => {
@@ -529,6 +590,53 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
         </Button>
       </Box>
 
+      {/* Zone de recherche */}
+      <Box sx={{ 
+        display: 'flex',
+        alignItems: 'center',
+        gap: 2,
+        mb: 3,
+        width: '100%'
+      }}>
+        <TextField
+          size="small"
+          label="Search"
+          placeholder="Search..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          sx={{ 
+            width: '300px',
+            '& .MuiOutlinedInput-root': {
+              borderRadius: '20px',
+            }
+          }}
+        />
+        
+        <Box sx={{ 
+          display: 'flex', 
+          flexWrap: 'wrap', 
+          gap: 1,
+          flex: 1
+        }}>
+          {allTags.map(tag => (
+            <Chip
+              key={tag}
+              label={tag}
+              onClick={() => handleTagToggle(tag)}
+              color={selectedTags.includes(tag) ? "primary" : "default"}
+              variant={selectedTags.includes(tag) ? "filled" : "outlined"}
+              size="small"
+              sx={{ 
+                borderRadius: '15px',
+                '&:hover': {
+                  backgroundColor: selectedTags.includes(tag) ? 'primary.dark' : 'grey.200'
+                }
+              }}
+            />
+          ))}
+        </Box>
+      </Box>
+
       {/* Zone de scroll pour la grille de projets */}
       <Box sx={{ 
         flexGrow: 1,
@@ -537,18 +645,32 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
       }}>
         {/* Grille de projets */}
         <Grid container spacing={3}>
-          {projectsList.map((project) => (
-            <Grid item xs={12} sm={6} md={4} key={project.projectId}>
-              <ProjectCard
-                project={project}
-                onSelect={() => onProjectSelect(project.projectId)}
-                onDelete={() => handleDeleteRequest(project.projectId)}
-                onPlay={() => handlePlayScenario(project)}
-                onImageChange={(e) => handleCoverImageChange(e, project.projectId)}
-                onEdit={() => handleEditRequest(project)}
-              />
+          {loading ? (
+            Array.from(new Array(4)).map((_, index) => (
+              <Grid item xs={12} sm={6} md={4} key={index}>
+                <Skeleton variant="rectangular" height={200} />
+              </Grid>
+            ))
+          ) : filteredProjects.length === 0 ? (
+            <Grid item xs={12}>
+              <Alert severity="info">
+                No projects found{selectedTags.length > 0 ? ' with selected tags' : ''}
+              </Alert>
             </Grid>
-          ))}
+          ) : (
+            filteredProjects.map((project) => (
+              <Grid item xs={12} sm={6} md={4} key={project.projectId}>
+                <ProjectCard
+                  project={project}
+                  onSelect={() => onProjectSelect(project.projectId)}
+                  onDelete={() => handleDeleteRequest(project.projectId)}
+                  onPlay={() => handlePlayScenario(project)}
+                  onImageChange={(e) => handleCoverImageChange(e, project.projectId)}
+                  onEdit={() => handleEditRequest(project)}
+                />
+              </Grid>
+            ))
+          )}
         </Grid>
       </Box>
 
@@ -565,12 +687,12 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
 
       {/* Dialogue de création de projet */}
       <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)}>
-        <DialogTitle>Créer un nouveau projet</DialogTitle>
+        <DialogTitle>Create New Project</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
             margin="dense"
-            label="Titre du projet"
+            label="Project Title"
             fullWidth
             value={newProjectTitle}
             onChange={(e) => setNewProjectTitle(e.target.value)}
@@ -586,26 +708,24 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({
           />
           <Box sx={{ mt: 2 }}>
             <TextField
+              label="Add Tags"
+              value={newTagInput}
+              onChange={(e) => setNewTagInput(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddTag();
+                }
+              }}
               fullWidth
-              label="Ajouter des hashtags"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => handleTagAdd(e, false)}
-              helperText="Appuyez sur Entrée pour ajouter un hashtag"
+              helperText="Press Enter to add a tag"
             />
-            <Box sx={{ 
-              display: 'flex', 
-              flexWrap: 'wrap', 
-              gap: 1,
-              mt: 1 
-            }}>
-              {newProjectTags.map((tag) => (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+              {newProjectTags.map(tag => (
                 <Chip
                   key={tag}
-                  label={`#${tag}`}
-                  onDelete={() => handleTagRemove(tag, false)}
-                  color="primary"
-                  variant="outlined"
+                  label={tag}
+                  onDelete={() => handleRemoveTag(tag)}
                 />
               ))}
             </Box>
