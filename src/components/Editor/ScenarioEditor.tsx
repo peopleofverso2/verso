@@ -53,6 +53,14 @@ interface ScenarioEditorProps {
 }
 
 export const ScenarioEditor: React.FC<ScenarioEditorProps> = ({ projectId }) => {
+  return (
+    <ReactFlowProvider>
+      <ScenarioEditorContent projectId={projectId} />
+    </ReactFlowProvider>
+  );
+};
+
+const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => {
   const navigate = useNavigate();
   const { projectId: routeProjectId } = useParams();
   const currentProjectId = projectId || routeProjectId;
@@ -638,4 +646,4 @@ export const ScenarioEditor: React.FC<ScenarioEditorProps> = ({ projectId }) => 
       </Box>
     </Box>
   );
-}
+};
