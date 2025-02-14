@@ -41,11 +41,25 @@ export class LocalStorageAdapter implements MediaStorageAdapter {
   }
 
   private clearUrlCaches() {
-    this.urlCache.forEach((url) => URL.revokeObjectURL(url));
-    this.thumbnailUrlCache.forEach((url) => URL.revokeObjectURL(url));
+    console.log('LocalStorageAdapter: Clearing URL caches...');
+    console.log('LocalStorageAdapter: Current cache size:', {
+      mediaUrls: this.urlCache.size,
+      thumbnailUrls: this.thumbnailUrlCache.size
+    });
+
+    this.urlCache.forEach((url, id) => {
+      console.log('LocalStorageAdapter: Revoking URL for media:', id);
+      URL.revokeObjectURL(url);
+    });
+    this.thumbnailUrlCache.forEach((url, id) => {
+      console.log('LocalStorageAdapter: Revoking thumbnail URL for media:', id);
+      URL.revokeObjectURL(url);
+    });
     
     this.urlCache.clear();
     this.thumbnailUrlCache.clear();
+    
+    console.log('LocalStorageAdapter: URL caches cleared');
   }
 
   private async getDb(): Promise<IDBPDatabase> {
@@ -241,14 +255,23 @@ export class LocalStorageAdapter implements MediaStorageAdapter {
 
   async getMedia(id: string): Promise<MediaFile> {
     try {
-      console.log('Getting media with ID:', id);
+      console.log('LocalStorageAdapter: Getting media with ID:', id);
       const db = await this.getDb();
       const file = await db.get(LocalStorageAdapter.MEDIA_STORE, id);
       const metadata = await db.get(LocalStorageAdapter.METADATA_STORE, id);
 
       if (!file) {
+        console.error('LocalStorageAdapter: Media not found:', id);
         throw new Error(`Media not found: ${id}`);
       }
+
+      console.log('LocalStorageAdapter: Media file found:', {
+        id,
+        hasFile: !!file,
+        hasMetadata: !!metadata,
+        fileType: file.type,
+        fileSize: file.size
+      });
 
       const finalMetadata = metadata || {
         id,
@@ -263,28 +286,49 @@ export class LocalStorageAdapter implements MediaStorageAdapter {
 
       let mediaUrl = this.urlCache.get(id);
       if (!mediaUrl) {
+        console.log('LocalStorageAdapter: Creating new URL for media:', id);
         mediaUrl = URL.createObjectURL(file);
         this.urlCache.set(id, mediaUrl);
+        console.log('LocalStorageAdapter: URL created and cached:', {
+          id,
+          hasUrl: !!mediaUrl
+        });
+      } else {
+        console.log('LocalStorageAdapter: Using cached URL for media:', id);
       }
 
       let thumbnailUrl = this.thumbnailUrlCache.get(id);
       if (!thumbnailUrl && finalMetadata.type === 'video') {
         const thumbnail = await db.get(LocalStorageAdapter.THUMBNAIL_STORE, id);
         if (thumbnail) {
+          console.log('LocalStorageAdapter: Creating thumbnail URL for video:', id);
           thumbnailUrl = URL.createObjectURL(thumbnail);
           this.thumbnailUrlCache.set(id, thumbnailUrl);
         }
       }
 
-      return {
+      const result = {
         id,
         url: mediaUrl,
         thumbnailUrl,
         metadata: finalMetadata,
       };
+
+      console.log('LocalStorageAdapter: Media loaded successfully:', {
+        id,
+        hasUrl: !!result.url,
+        hasMetadata: !!result.metadata,
+        type: result.metadata.type
+      });
+
+      return result;
     } catch (error) {
-      console.error('Error in getMedia:', error);
+      console.error('LocalStorageAdapter: Error in getMedia:', {
+        id,
+        error
+      });
       if (error instanceof Error && error.name === 'NotFoundError') {
+        console.log('LocalStorageAdapter: Database not found, attempting reset...');
         await this.resetDatabase();
         return this.getMedia(id);
       }

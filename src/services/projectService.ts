@@ -2,7 +2,7 @@ import { Project, ProjectMetadata } from '../types/project';
 
 const DB_NAME = 'verso_db';
 const STORE_NAME = 'projects';
-const DB_VERSION = 5; // Incrémenter la version pour forcer la mise à jour
+const DB_VERSION = 6; // Updated to match local database version
 
 export class ProjectService {
   private db: IDBDatabase | null = null;
