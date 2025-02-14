@@ -33,6 +33,7 @@ import 'reactflow/dist/style.css';
 import debounce from 'lodash.debounce';
 import { Snackbar } from '@mui/material';
 import { layoutNodes } from '../../utils/layout';
+import { useNavigate, useParams } from 'react-router-dom';
 
 const nodeTypes: NodeTypes = {
   videoNode2: VideoNode2,
@@ -49,10 +50,17 @@ function getId(): string {
 
 interface ScenarioEditorProps {
   projectId?: string;
-  onBackToLibrary?: () => void;
 }
 
-function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorProps) {
+export const ScenarioEditor: React.FC<ScenarioEditorProps> = ({ projectId }) => {
+  const navigate = useNavigate();
+  const { projectId: routeProjectId } = useParams();
+  const currentProjectId = projectId || routeProjectId;
+
+  const handleBackToLibrary = () => {
+    navigate('/');
+  };
+
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
@@ -237,11 +245,11 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
   }, []);
 
   const handleSave = useCallback(async () => {
-    if (!projectId || !project) return;
+    if (!currentProjectId || !project) return;
 
     setIsSaving(true);
     try {
-      console.log('Saving project:', projectId);
+      console.log('Saving project:', currentProjectId);
       
       // Vérifier que tous les médias sont bien sauvegardés
       const mediaLibrary = await MediaLibraryService.getInstance();
@@ -292,7 +300,7 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
     } finally {
       setIsSaving(false);
     }
-  }, [projectId, project, nodes, edges, projectService]);
+  }, [currentProjectId, project, nodes, edges, projectService]);
 
   // Démarrer la lecture
   const startPlayback = useCallback(async () => {
@@ -397,7 +405,7 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
     try {
       setExporting(true);
       const projectService = await ProjectService.getInstance();
-      const project = await projectService.getProject(projectId);
+      const project = await projectService.getProject(currentProjectId);
       
       if (!project) {
         throw new Error('Project not found');
@@ -441,7 +449,7 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
         severity: 'error'
       });
     }
-  }, [projectId]);
+  }, [currentProjectId]);
 
   const handleImportPov = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -486,11 +494,11 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
     let isSubscribed = true;
 
     const loadProject = async () => {
-      if (!projectId) return;
+      if (!currentProjectId) return;
       
       try {
-        console.log('Loading project:', projectId);
-        const loadedProject = await projectService.loadProject(projectId);
+        console.log('Loading project:', currentProjectId);
+        const loadedProject = await projectService.loadProject(currentProjectId);
         if (loadedProject && isSubscribed) {
           console.log('Project loaded:', loadedProject);
           setProject(loadedProject);
@@ -519,7 +527,7 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
     return () => {
       isSubscribed = false;
     };
-  }, [projectId]); // Ne dépend que de projectId
+  }, [currentProjectId]); // Ne dépend que de projectId
 
   // Sauvegarder lors des changements de nœuds ou d'arêtes
   useEffect(() => {
@@ -579,7 +587,7 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
         <Sidebar
           onSave={handleSave}
           isSaving={isSaving}
-          onBackToLibrary={onBackToLibrary}
+          onBackToLibrary={handleBackToLibrary}
           isPlaybackMode={isPlaybackMode}
           onStartPlayback={startPlayback}
           onStopPlayback={stopPlayback}
@@ -631,13 +639,3 @@ function ScenarioEditorContent({ projectId, onBackToLibrary }: ScenarioEditorPro
     </Box>
   );
 }
-
-function ScenarioEditor(props: ScenarioEditorProps) {
-  return (
-    <ReactFlowProvider>
-      <ScenarioEditorContent {...props} />
-    </ReactFlowProvider>
-  );
-}
-
-export default ScenarioEditor;

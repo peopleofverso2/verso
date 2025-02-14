@@ -42,11 +42,6 @@ import { LoginButton } from '../Auth/LoginButton';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
-interface ProjectLibraryProps {
-  onProjectSelect: (projectId: string) => void;
-  onProjectDelete: (projectId: string) => void;
-}
-
 interface ProjectMetadataDialogProps {
   open: boolean;
   project: ProjectMetadata;
@@ -137,9 +132,9 @@ const ProjectMetadataDialog: React.FC<ProjectMetadataDialogProps> = ({
   );
 };
 
-const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProjectDelete }) => {
-  const { user } = useAuth();
+export const ProjectLibrary: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [projects, setProjects] = useState<ProjectMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -226,7 +221,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
       await loadProjects();
       
       console.log('Selecting new project...');
-      onProjectSelect(projectId);
+      navigate(`/editor/${projectId}`);
     } catch (error) {
       console.error('Error creating project:', error);
       setError('Erreur lors de la création du projet');
@@ -383,6 +378,10 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
     }
   };
 
+  const handleProjectSelect = (projectId: string) => {
+    navigate(`/editor/${projectId}`);
+  };
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* PovPlayer Modal */}
@@ -509,7 +508,7 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
                 </IconButton>
                 <IconButton
                   size="small"
-                  onClick={() => onProjectSelect(project.projectId)}
+                  onClick={() => handleProjectSelect(project.projectId)}
                   title="Ouvrir"
                   sx={{ color: project.scenario?.coverImage ? 'white' : 'inherit' }}
                 >
@@ -599,5 +598,3 @@ const ProjectLibrary: React.FC<ProjectLibraryProps> = ({ onProjectSelect, onProj
     </Container>
   );
 };
-
-export default ProjectLibrary;
