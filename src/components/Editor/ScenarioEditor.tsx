@@ -315,9 +315,10 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
     try {
       if (!project) return;
 
-      // Exporter le scénario au format POV
+      // Exporter le scénario au format POV avec un titre par défaut si non défini
+      const scenarioTitle = project.scenario?.scenarioTitle || 'Untitled Scenario';
       const scenario = await povExportService.current.exportScenario(
-        project.scenario.scenarioTitle,
+        scenarioTitle,
         nodes,
         edges
       );

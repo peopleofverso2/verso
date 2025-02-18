@@ -273,7 +273,7 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
         id="default-handle"
         style={{ 
           background: '#555',
-          visibility: data.content?.choices && data.content.choices.length > 0 ? 'hidden' : 'visible'
+          visibility: 'visible'
         }}
       />
       <Handle
