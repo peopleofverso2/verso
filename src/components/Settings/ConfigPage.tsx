@@ -298,6 +298,47 @@ export const ConfigPage: React.FC = () => {
                     </Box>
                   )}
                 </Box>
+
+                <Divider sx={{ my: 3 }} />
+
+                {/* Luma API */}
+                <Box mb={3}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={config?.apis.luma?.enabled || false}
+                        onChange={handleAPIToggle('luma')}
+                      />
+                    }
+                    label="Enable Luma API"
+                  />
+                  {config?.apis.luma?.enabled && (
+                    <Box mt={2}>
+                      <TextField
+                        fullWidth
+                        label="Luma API Key"
+                        type="password"
+                        value={config?.apis.luma?.apiKey || ''}
+                        onChange={handleAPIKeyChange('luma')}
+                        sx={{ mb: 1 }}
+                      />
+                      <TextField
+                        fullWidth
+                        label="Luma API Endpoint"
+                        value={config?.apis.luma?.endpoint || 'https://lumalabs.ai/dream-machine/api'}
+                        disabled
+                        sx={{ mb: 1 }}
+                      />
+                      <Button
+                        variant="outlined"
+                        onClick={() => testAPIKey('luma')}
+                        color={testResults.luma ? 'success' : 'primary'}
+                      >
+                        Test Key
+                      </Button>
+                    </Box>
+                  )}
+                </Box>
               </CardContent>
             </Card>
 

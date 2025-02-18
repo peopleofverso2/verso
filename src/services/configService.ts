@@ -14,6 +14,11 @@ export interface APIConfig {
     enabled: boolean;
     apiKey?: string;
   };
+  luma?: {
+    enabled: boolean;
+    apiKey?: string;
+    endpoint: string;
+  };
 }
 
 export interface AppConfig {
@@ -29,7 +34,7 @@ export interface AppConfig {
 
 const DB_NAME = 'verso_config';
 const STORE_NAME = 'config';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 class ConfigService {
   private static instance: ConfigService;
@@ -47,9 +52,34 @@ class ConfigService {
   private async getDB(): Promise<IDBPDatabase> {
     if (!this.db) {
       this.db = await openDB(DB_NAME, DB_VERSION, {
-        upgrade(db) {
+        upgrade(db, oldVersion, newVersion) {
           if (!db.objectStoreNames.contains(STORE_NAME)) {
             db.createObjectStore(STORE_NAME);
+          }
+          
+          // Migration de v1 à v2
+          if (oldVersion < 2) {
+            const transaction = db.transaction(STORE_NAME, 'readwrite');
+            const store = transaction.objectStore(STORE_NAME);
+            
+            // Récupérer la config existante
+            store.get('app_config').then((config) => {
+              if (config) {
+                // Mettre à jour la structure si nécessaire
+                const updatedConfig = {
+                  ...config,
+                  apis: {
+                    ...config.apis,
+                    // Ajouter les nouveaux champs de la v2 si nécessaire
+                  },
+                  storage: {
+                    ...config.storage,
+                    // Ajouter les nouveaux champs de la v2 si nécessaire
+                  }
+                };
+                store.put(updatedConfig, 'app_config');
+              }
+            });
           }
         },
       });
@@ -104,6 +134,10 @@ class ConfigService {
         meta: {
           enabled: false,
         },
+        luma: {
+          enabled: false,
+          endpoint: 'https://lumalabs.ai/dream-machine/api',
+        },
       },
       storage: {
         type: 'local',
@@ -120,6 +154,8 @@ class ConfigService {
           return await this.testOpenAIAPI(apiKey);
         case 'meta':
           return await this.testMetaAPI(apiKey);
+        case 'luma':
+          return await this.testLumaAPI(apiKey);
         default:
           return false;
       }
@@ -155,6 +191,11 @@ class ConfigService {
 
   private async testMetaAPI(apiKey: string): Promise<boolean> {
     // Implement Meta API test when needed
+    return true;
+  }
+
+  private async testLumaAPI(apiKey: string): Promise<boolean> {
+    // Implement Luma API test when needed
     return true;
   }
 }
