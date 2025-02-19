@@ -9,6 +9,7 @@ import {
   MenuItem,
   Tooltip,
   Dialog,
+  Button,
 } from '@mui/material';
 import {
   PlayArrow as PlayIcon,
@@ -86,7 +87,11 @@ const VideoNode: React.FC<VideoNodeProps> = React.memo(({ id, data, isConnectabl
 
   const handleVideoEnd = useCallback(() => {
     setIsPlaying(false);
-  }, []);
+    if (data.isPlaybackMode && data.content?.choices && data.content.choices.length === 1) {
+      // Auto-select single choice at video end
+      data.onChoiceSelect?.(id, data.content.choices[0]);
+    }
+  }, [data, id]);
 
   // Contrôles vidéo
   const togglePlayPause = useCallback((event?: React.MouseEvent) => {
@@ -332,22 +337,56 @@ const VideoNode: React.FC<VideoNodeProps> = React.memo(({ id, data, isConnectabl
                 </Box>
               )}
 
-              {/* Bouton d'édition en mode édition */}
-              {!data.isPlaybackMode && (
-                <IconButton
-                  onClick={() => setIsEditing(true)}
+              {/* Boutons de choix en mode lecture */}
+              {data.isPlaybackMode && data.content?.choices && data.content.choices.length > 0 && (!isPlaying || currentTime >= duration) && (
+                <Box
                   sx={{
                     position: 'absolute',
-                    top: 8,
-                    right: 8,
-                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                    '&:hover': {
-                      backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    },
+                    bottom: '20%',
+                    left: 0,
+                    right: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                    alignItems: 'center',
+                    p: 2,
+                    zIndex: 1000,
                   }}
                 >
-                  <EditIcon />
-                </IconButton>
+                  {data.content.choices.map((choice) => (
+                    <Button
+                      key={choice.id}
+                      variant="contained"
+                      onClick={() => data.onChoiceSelect?.(id, choice)}
+                      sx={{
+                        minWidth: '280px',
+                        height: '64px',
+                        fontSize: '1.2rem',
+                        fontWeight: 500,
+                        bgcolor: 'rgba(0, 0, 0, 0.75)',
+                        backdropFilter: 'blur(8px)',
+                        color: 'white',
+                        border: '2px solid rgba(255, 255, 255, 0.5)',
+                        borderRadius: '32px',
+                        textTransform: 'none',
+                        transition: 'all 0.3s ease',
+                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+                        '&:hover': {
+                          bgcolor: 'rgba(0, 0, 0, 0.85)',
+                          border: '2px solid rgba(255, 255, 255, 0.8)',
+                          transform: 'scale(1.02)',
+                          boxShadow: '0 6px 16px rgba(0, 0, 0, 0.6)'
+                        },
+                        '&:active': {
+                          bgcolor: 'rgba(0, 0, 0, 0.95)',
+                          transform: 'scale(0.98)'
+                        }
+                      }}
+                    >
+                      {choice.text}
+                    </Button>
+                  ))}
+                </Box>
               )}
             </Box>
           ) : (

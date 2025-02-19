@@ -42,6 +42,7 @@ const nodeTypes: NodeTypes = {
 
 const edgeTypes: EdgeTypes = {
   'choice': ChoiceEdge,
+  'default': ChoiceEdge,
 };
 
 function getId(): string {
@@ -171,54 +172,110 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
   }, []);
 
   const onConnect = useCallback((connection: Connection) => {
-    if (!connection.source || !connection.target) return;
-
-    const sourceNode = nodes.find(n => n.id === connection.source);
-    const sourceHandle = connection.sourceHandle;
-    let choiceId = null;
-
-    if (sourceHandle && sourceHandle.startsWith('button-handle-')) {
-      choiceId = sourceHandle.replace('button-handle-', '');
+    console.log('onConnect called with:', connection);
+    
+    if (!connection.source || !connection.target) {
+      console.error('Missing source or target in connection:', connection);
+      return;
     }
 
-    // Créer un lien de choix avec le texte du bouton
+    if (connection.source === connection.target) {
+      console.error('Cannot connect node to itself:', connection);
+      return;
+    }
+
+    const sourceNode = nodes.find(n => n.id === connection.source);
+    if (!sourceNode) {
+      console.error('Source node not found:', connection.source);
+      return;
+    }
+    
+    console.log('Source node:', sourceNode);
+    const sourceHandle = connection.sourceHandle;
+    console.log('Source handle:', sourceHandle);
+    
+    let choiceId = null;
+    let choiceText = '';
+
+    // Si c'est une connexion depuis un bouton
+    if (sourceHandle?.startsWith('button-handle-')) {
+      choiceId = sourceHandle.replace('button-handle-', '');
+      const choice = sourceNode.data.content?.choices?.find((c: any) => c.id === choiceId);
+      if (!choice) {
+        console.error('Choice not found in source node:', choiceId);
+        return;
+      }
+      choiceText = choice.text;
+    }
+
+    // Check if this connection already exists
+    const existingEdge = edges.find(e => 
+      e.source === connection.source && 
+      (sourceHandle ? e.sourceHandle === sourceHandle : e.sourceHandle === 'default-handle')
+    );
+
+    if (existingEdge) {
+      console.log('Removing existing edge:', existingEdge);
+      setEdges(eds => eds.filter(e => e.id !== existingEdge.id));
+    }
+
+    // Create the new edge
     const edge: Edge = {
       ...connection,
-      id: `choice-${connection.source}-${connection.target}-${choiceId}`,
-      type: 'choice',
-      data: {
+      id: choiceId 
+        ? `choice-${connection.source}-${connection.target}-${choiceId}`
+        : `edge-${connection.source}-${connection.target}`,
+      type: choiceId ? 'choice' : 'default',
+      sourceHandle: sourceHandle || 'default-handle',
+      targetHandle: connection.targetHandle || 'default-handle',
+      data: choiceId ? {
         choiceId,
-        text: sourceNode?.data.choices?.find((c: any) => c.id === choiceId)?.text || ''
-      },
-      style: { strokeWidth: 2 }
-    };
-
-    // Mettre à jour les choix du nœud source
-    setNodes(nds => nds.map(node => {
-      if (node.id === connection.source) {
-        const updatedChoices = (node.data.choices || []).map((choice: any) => {
-          if (choice.id === choiceId) {
-            return {
-              ...choice,
-              nextStepId: connection.target
-            };
-          }
-          return choice;
-        });
-        
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            choices: updatedChoices
-          }
-        };
+        text: choiceText
+      } : undefined,
+      style: { 
+        strokeWidth: 2,
+        stroke: '#1976d2'
       }
-      return node;
-    }));
+    };
+    console.log('Created edge:', edge);
 
+    // Update source node choices if it's a choice connection
+    if (choiceId) {
+      setNodes(nds => {
+        return nds.map(node => {
+          if (node.id === connection.source) {
+            console.log('Updating node:', node);
+            const updatedChoices = (node.data.content?.choices || []).map((c: any) => {
+              if (c.id === choiceId) {
+                return {
+                  ...c,
+                  nextStepId: connection.target
+                };
+              }
+              return c;
+            });
+            
+            const updatedNode = {
+              ...node,
+              data: {
+                ...node.data,
+                content: {
+                  ...node.data.content,
+                  choices: updatedChoices
+                }
+              }
+            };
+            console.log('Updated node:', updatedNode);
+            return updatedNode;
+          }
+          return node;
+        });
+      });
+    }
+
+    console.log('Adding edge:', edge);
     setEdges(eds => [...eds, edge]);
-  }, [nodes]);
+  }, [nodes, edges]);
 
   const onEdgesDelete = useCallback((edgesToDelete: Edge[]) => {
     // Mettre à jour les choix des nœuds source quand un lien est supprimé
@@ -226,7 +283,7 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
       if (edge.data?.choiceId) {
         setNodes(nds => nds.map(node => {
           if (node.id === edge.source) {
-            const updatedChoices = (node.data.choices || []).map((choice: any) => {
+            const updatedChoices = (node.data.content?.choices || []).map((choice: any) => {
               if (choice.id === edge.data.choiceId) {
                 return {
                   ...choice,
@@ -240,7 +297,10 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
               ...node,
               data: {
                 ...node.data,
-                choices: updatedChoices
+                content: {
+                  ...node.data.content,
+                  choices: updatedChoices
+                }
               }
             };
           }

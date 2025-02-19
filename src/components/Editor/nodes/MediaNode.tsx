@@ -1,39 +1,31 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Handle, Position } from 'reactflow';
 import {
+  Box,
+  Paper,
+  IconButton,
+  Button,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  IconButton,
-  Button,
-  Box,
-  Paper,
   Slider,
-  Stack,
+  Typography,
   TextField,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  Tooltip,
+  FormControlLabel,
+  Switch,
+  Tooltip
 } from '@mui/material';
-import {
-  Edit as EditIcon,
-  VolumeUp as VolumeUpIcon,
-  VolumeOff as VolumeOffIcon,
-  Movie as MovieIcon,
-  Image as ImageIcon,
-  Timer as TimerIcon,
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  SmartButton as SmartButtonIcon,
-  MusicNote as MusicNoteIcon,
-} from '@mui/icons-material';
+import EditIcon from '@mui/icons-material/Edit';
+import MusicNoteIcon from '@mui/icons-material/MusicNote';
+import SmartButtonIcon from '@mui/icons-material/SmartButton';
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import VolumeOffIcon from '@mui/icons-material/VolumeOff';
+import DeleteIcon from '@mui/icons-material/Delete';
+import AddIcon from '@mui/icons-material/Add';
 import MediaLibrary from '../../../components/MediaLibrary/MediaLibrary';
-import { MediaFile } from '../../../types';
+import { MediaFile } from '../../../types/media';
 import { MediaLibraryService } from '../../../services/MediaLibraryService';
-import TimerSettings from './TimerSettings';
 
 interface MediaNodeProps {
   id: string;
@@ -42,11 +34,6 @@ interface MediaNodeProps {
     mediaType?: 'video' | 'image';
     audioId?: string;
     content?: {
-      timer?: {
-        duration: number;
-        autoTransition: boolean;
-        loop: boolean;
-      };
       audio?: {
         loop?: boolean;
         volume?: number;
@@ -67,312 +54,176 @@ interface MediaNodeProps {
 }
 
 const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
-  // Media states
-  const [mediaUrl, setMediaUrl] = useState<string>();
-  const [audioUrl, setAudioUrl] = useState<string>();
-  const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
-  const [isAudioDialogOpen, setIsAudioDialogOpen] = useState(false);
-  const [isTimerDialogOpen, setIsTimerDialogOpen] = useState(false);
-  const [isButtonDialogOpen, setIsButtonDialogOpen] = useState(false);
+  // États pour les médias
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isMediaLoaded, setIsMediaLoaded] = useState(false);
+  const [isAudioLoaded, setIsAudioLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [isHovered, setIsHovered] = useState(false);
-  const [error, setError] = useState<string>();
-  const [dimensions, setDimensions] = useState<{ width: number; height: number }>();
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [showButtons, setShowButtons] = useState(true); // Toujours afficher les boutons par défaut
 
-  // Audio states
-  const [volume, setVolume] = useState(data.content?.audio?.volume ?? 1);
-  const [isMuted, setIsMuted] = useState(false);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const timerRef = useRef<NodeJS.Timeout>();
+  // Gestion de la fin du média
+  const handleVideoEnd = useCallback(() => {
+    console.log('Video ended, id:', id);
+    console.log('isPlaybackMode:', data.isPlaybackMode);
+    console.log('choices:', data.content?.choices);
+    
+    if (data.isPlaybackMode) {
+      if (!data.content?.choices || data.content.choices.length === 0) {
+        console.log('No choices available, calling onMediaEnd');
+        data.onMediaEnd?.(id);
+      } else if (data.content.choices.length === 1) {
+        console.log('Single choice available, auto-selecting');
+        data.onChoiceSelect?.(id, data.content.choices[0]);
+      } else {
+        console.log('Multiple choices, showing buttons');
+        setShowButtons(true);
+      }
+    }
+  }, [data, id]);
 
-  // New state for button visibility
-  const [showButtons, setShowButtons] = useState(false);
+  // Log des changements d'état
+  useEffect(() => {
+    console.log('MediaNode state:', {
+      id,
+      isPlaybackMode: data.isPlaybackMode,
+      mediaType: data.mediaType,
+      hasChoices: data.content?.choices?.length > 0,
+      showButtons,
+      isMediaLoaded
+    });
+  }, [id, data.isPlaybackMode, data.mediaType, data.content?.choices, showButtons, isMediaLoaded]);
 
-  // New state for button management
-  const [newButtonText, setNewButtonText] = useState('');
+  // Reset showButtons when node changes
+  useEffect(() => {
+    setShowButtons(true);
+  }, [id]);
 
-  // Load media on mount and when mediaId changes
+  // Chargement du média
   useEffect(() => {
     const loadMedia = async () => {
       if (!data.mediaId) {
-        setMediaUrl(undefined);
-        setDimensions(undefined);
+        setMediaUrl(null);
+        setIsMediaLoaded(false);
         return;
       }
+
       try {
-        console.log('Loading media for node:', id);
         const mediaLibrary = await MediaLibraryService.getInstance();
         const media = await mediaLibrary.getMedia(data.mediaId);
-        console.log('Media loaded:', media);
         
-        if (media && media.url) {
+        if (media && media.metadata && media.url) {
+          // Utiliser directement l'URL du média
           setMediaUrl(media.url);
-          if (media.metadata.dimensions) {
-            setDimensions(media.metadata.dimensions);
-          }
-          if (media.metadata.type) {
-            data.onDataChange?.(id, {
-              ...data,
-              mediaType: media.metadata.type
-            });
-          }
-          setError(undefined);
+          setError(null);
+          setIsMediaLoaded(true);
         } else {
-          console.error('Media or URL is missing');
+          console.error('Media not found:', data.mediaId);
           setError('Media not found');
+          setIsMediaLoaded(false);
         }
       } catch (error) {
         console.error('Error loading media:', error);
         setError('Failed to load media');
+        setIsMediaLoaded(false);
       }
     };
-    loadMedia();
-    
-    // Cleanup function
-    return () => {
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.src = '';
-        videoRef.current.load();
-      }
-    };
-  }, [data.mediaId, id]);
 
-  // Load audio on mount and when audioId changes
+    loadMedia();
+  }, [data.mediaId]);
+
+  // Chargement de l'audio
   useEffect(() => {
     const loadAudio = async () => {
       if (!data.audioId) {
-        setAudioUrl(undefined);
+        setAudioUrl(null);
+        setIsAudioLoaded(false);
         return;
       }
+
       try {
         const mediaLibrary = await MediaLibraryService.getInstance();
         const audio = await mediaLibrary.getMedia(data.audioId);
-        if (audio && audio.url) {
+        
+        if (audio && audio.metadata && audio.url) {
+          // Utiliser directement l'URL de l'audio
           setAudioUrl(audio.url);
-          setError(undefined);
+          setError(null);
+          setIsAudioLoaded(true);
+        } else {
+          console.error('Audio not found:', data.audioId);
+          setError('Audio not found');
+          setIsAudioLoaded(false);
         }
       } catch (error) {
         console.error('Error loading audio:', error);
         setError('Failed to load audio');
+        setIsAudioLoaded(false);
       }
     };
+
     loadAudio();
-    
-    // Cleanup function
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-        audioRef.current.load();
-      }
-    };
   }, [data.audioId]);
 
-  // Playback control effect
-  useEffect(() => {
-    if (data.isPlaybackMode) {
-      // Démarrer la lecture automatiquement en mode playback
-      if (videoRef.current) {
-        videoRef.current.play().catch(console.error);
-        setIsPlaying(true);
-      }
-      if (audioRef.current) {
-        // Appliquer le fade-in si configuré
-        if (data.content?.audio?.fadeIn) {
-          audioRef.current.volume = 0;
-          const targetVolume = data.content.audio.volume ?? 1;
-          const fadeInDuration = data.content.audio.fadeIn * 1000;
-          const steps = 50;
-          const stepTime = fadeInDuration / steps;
-          const volumeStep = targetVolume / steps;
+  // États pour les contrôles
+  const [volume, setVolume] = useState(data.content?.audio?.volume ?? 1);
+  const [isMuted, setIsMuted] = useState(false);
 
-          let currentStep = 0;
-          const fadeInterval = setInterval(() => {
-            currentStep++;
-            if (audioRef.current && currentStep <= steps) {
-              audioRef.current.volume = volumeStep * currentStep;
-            } else {
-              clearInterval(fadeInterval);
-            }
-          }, stepTime);
-        }
-        audioRef.current.play().catch(console.error);
-      }
-    } else {
-      // Arrêter la lecture si on n'est pas en mode playback
-      if (videoRef.current) {
-        videoRef.current.pause();
-        setIsPlaying(false);
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+  // États pour les dialogues
+  const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
+  const [isAudioDialogOpen, setIsAudioDialogOpen] = useState(false);
+  const [isButtonDialogOpen, setIsButtonDialogOpen] = useState(false);
+  const [editedChoices, setEditedChoices] = useState<Array<{ id: string; text: string }>>([]);
+
+  // Initialiser les choix édités quand le dialogue s'ouvre
+  useEffect(() => {
+    if (isButtonDialogOpen) {
+      setEditedChoices(data.content?.choices ?? []);
     }
+  }, [isButtonDialogOpen, data.content?.choices]);
 
-    // Cleanup function
-    return () => {
-      if (videoRef.current) {
-        videoRef.current.pause();
-      }
-      if (audioRef.current) {
-        // Appliquer le fade-out si configuré
-        if (data.content?.audio?.fadeOut) {
-          const currentVolume = audioRef.current.volume;
-          const fadeOutDuration = data.content.audio.fadeOut * 1000;
-          const steps = 50;
-          const stepTime = fadeOutDuration / steps;
-          const volumeStep = currentVolume / steps;
-
-          let currentStep = 0;
-          const fadeInterval = setInterval(() => {
-            currentStep++;
-            if (audioRef.current && currentStep <= steps) {
-              audioRef.current.volume = currentVolume - (volumeStep * currentStep);
-            } else {
-              if (audioRef.current) {
-                audioRef.current.pause();
-              }
-              clearInterval(fadeInterval);
-            }
-          }, stepTime);
-        } else {
-          audioRef.current.pause();
-        }
-      }
-    };
-  }, [data.isPlaybackMode, data.content?.audio]);
-
-  // Initialize audio/video properties
-  useEffect(() => {
-    const initializeMedia = () => {
-      if (audioRef.current) {
-        audioRef.current.volume = volume;
-        audioRef.current.muted = isMuted;
-        audioRef.current.loop = data.content?.audio?.loop ?? false;
-      }
-      if (videoRef.current) {
-        videoRef.current.volume = volume;
-        videoRef.current.muted = isMuted;
-        videoRef.current.loop = data.content?.timer?.loop ?? false;
-      }
-    };
-
-    initializeMedia();
-  }, [volume, isMuted, data.content?.audio?.loop, data.content?.timer?.loop, mediaUrl, audioUrl]);
-
-  // Timer effect for images
-  useEffect(() => {
-    if (data.mediaType === 'image' && data.isPlaybackMode) {
-      // Show buttons immediately if no timer or timer is 0
-      if (!data.content?.timer?.duration || data.content.timer.duration === 0) {
-        setShowButtons(true);
-        return;
-      }
-
-      // Reset buttons visibility
-      setShowButtons(false);
-
-      if (data.content?.timer?.autoTransition) {
-        const startTimer = () => {
-          if (timerRef.current) {
-            clearTimeout(timerRef.current);
-          }
-          
-          timerRef.current = setTimeout(() => {
-            // Show buttons when timer expires
-            setShowButtons(true);
-            
-            // Handle auto-transition if no choices are available
-            if (!data.content?.choices?.length) {
-              if (data.onMediaEnd) {
-                data.onMediaEnd(id);
-              }
-              if (data.content?.timer?.loop) {
-                startTimer();
-              }
-            }
-          }, data.content.timer.duration * 1000);
-        };
-
-        startTimer();
-        return () => {
-          if (timerRef.current) {
-            clearTimeout(timerRef.current);
-          }
-        };
-      } else {
-        // If timer exists but auto-transition is off, just show buttons after timer
-        const timer = setTimeout(() => {
-          setShowButtons(true);
-        }, data.content.timer.duration * 1000);
-        
-        return () => clearTimeout(timer);
-      }
-    } else if (!data.isPlaybackMode) {
-      // Reset buttons visibility when not in playback mode
-      setShowButtons(false);
-    }
-  }, [id, data.mediaType, data.content?.timer, data.isPlaybackMode, data.onMediaEnd, data.content?.choices]);
-
-  // Handle media selection
+  // Handlers
   const handleMediaSelect = useCallback(async (mediaFiles: MediaFile[]) => {
-    if (!mediaFiles.length || !data.onDataChange) return;
-
-    try {
+    if (mediaFiles.length > 0) {
       const mediaFile = mediaFiles[0];
-      const newData = {
-        ...data,
-        mediaId: mediaFile.id,
-        mediaType: mediaFile.metadata.type,
-      };
-      setMediaUrl(mediaFile.url);
-      data.onDataChange(id, newData);
-      setIsMediaDialogOpen(false);
-    } catch (error) {
-      console.error('Error selecting media:', error);
-      setError('Failed to select media');
+      if (data.onDataChange) {
+        data.onDataChange(id, {
+          ...data,
+          mediaId: mediaFile.metadata.id,
+          mediaType: mediaFile.metadata.type,
+        });
+      }
     }
-  }, [id, data, data.onDataChange]);
+    setIsMediaDialogOpen(false);
+  }, [id, data]);
 
-  // Handle audio selection
   const handleAudioSelect = useCallback(async (mediaFiles: MediaFile[]) => {
-    if (!mediaFiles.length || !data.onDataChange) return;
-
-    try {
+    if (mediaFiles.length > 0) {
       const audioFile = mediaFiles[0];
-      const newData = {
-        ...data,
-        audioId: audioFile.id,
-        content: {
-          ...data.content,
-          audio: {
-            ...data.content?.audio,
-            volume: 1,
-            loop: true,
+      if (data.onDataChange) {
+        data.onDataChange(id, {
+          ...data,
+          audioId: audioFile.metadata.id,
+          content: {
+            ...data.content,
+            audio: {
+              ...data.content?.audio,
+              volume: 1,
+              fadeIn: 0,
+              fadeOut: 0,
+              loop: false,
+            },
           },
-        },
-      };
-      setAudioUrl(audioFile.url);
-      data.onDataChange(id, newData);
-      setIsAudioDialogOpen(false);
-    } catch (error) {
-      console.error('Error selecting audio:', error);
-      setError('Failed to select audio');
+        });
+      }
     }
-  }, [id, data, data.onDataChange]);
+    setIsAudioDialogOpen(false);
+  }, [id, data]);
 
-  // Handle volume change
   const handleVolumeChange = useCallback((event: Event, newValue: number | number[]) => {
-    const newVolume = newValue as number;
-    setVolume(newVolume);
-    if (audioRef.current) {
-      audioRef.current.volume = newVolume;
-    }
-    if (videoRef.current) {
-      videoRef.current.volume = newVolume;
-    }
+    const value = newValue as number;
+    setVolume(value);
     if (data.onDataChange) {
       data.onDataChange(id, {
         ...data,
@@ -380,115 +231,150 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
           ...data.content,
           audio: {
             ...data.content?.audio,
-            volume: newVolume,
+            volume: value,
           },
         },
       });
     }
-  }, [id, data, data.onDataChange]);
+  }, [id, data]);
 
-  // Handle mute toggle
   const handleMuteToggle = useCallback(() => {
     setIsMuted(!isMuted);
-    if (audioRef.current) {
-      audioRef.current.muted = !isMuted;
-    }
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-    }
   }, [isMuted]);
 
-  // Handle timer settings
-  const handleTimerSave = useCallback((timer: { duration: number; autoTransition: boolean; loop: boolean }) => {
+  const handleButtonsChange = useCallback((choices: Array<{ id: string; text: string }>) => {
     if (data.onDataChange) {
       data.onDataChange(id, {
         ...data,
         content: {
           ...data.content,
-          timer,
+          choices,
         },
       });
     }
-  }, [id, data, data.onDataChange]);
+    setIsButtonDialogOpen(false);
+  }, [id, data]);
 
-  // Handle button management
-  const handleAddButton = useCallback(() => {
-    if (!newButtonText.trim() || !data.onDataChange) return;
+  // Log initial data
+  useEffect(() => {
+    console.log('MediaNode mounted with ID:', id);
+    console.log('MediaNode data:', data);
+    console.log('MediaNode content:', data.content);
+    console.log('MediaNode choices:', data.content?.choices);
 
-    const newButton = {
-      id: `btn-${Date.now()}`,
-      text: newButtonText.trim()
-    };
-
-    const newData = {
-      ...data,
-      content: {
-        ...data.content,
-        choices: [...(data.content?.choices || []), newButton]
-      }
-    };
-
-    data.onDataChange(id, newData);
-    setNewButtonText('');
-  }, [id, data, newButtonText]);
-
-  const handleRemoveButton = useCallback((buttonId: string) => {
-    if (!data.onDataChange) return;
-
-    const newData = {
-      ...data,
-      content: {
-        ...data.content,
-        choices: data.content?.choices?.filter(choice => choice.id !== buttonId) || []
-      }
-    };
-
-    data.onDataChange(id, newData);
-  }, [id, data, data.onDataChange]);
-
-  const handleEditButtonText = useCallback((buttonId: string, newText: string) => {
-    if (!data.onDataChange) return;
-
-    const newData = {
-      ...data,
-      content: {
-        ...data.content,
-        choices: data.content?.choices?.map(choice => 
-          choice.id === buttonId ? { ...choice, text: newText } : choice
-        ) || []
-      }
-    };
-
-    data.onDataChange(id, newData);
-  }, [id, data, data.onDataChange]);
+    // Log handle configuration
+    if (data.content?.choices) {
+      data.content.choices.forEach(choice => {
+        console.log(`Configuring handle for button ${choice.id}:`, {
+          id: `button-handle-${choice.id}`,
+          type: 'source',
+          position: Position.Right
+        });
+      });
+    }
+  }, [id, data]);
 
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Handle type="target" position={Position.Top} />
-      <Paper
-        elevation={1}
+    <Paper
+      elevation={selected ? 8 : 2}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      sx={{
+        minWidth: 320,
+        maxWidth: 480,
+        width: '100%',
+        bgcolor: 'background.paper',
+        borderRadius: 2,
+        overflow: 'visible',
+        transition: 'all 0.2s ease-in-out',
+        transform: selected ? 'scale(1.02)' : 'scale(1)',
+        border: selected ? '2px solid #1976d2' : 'none',
+        position: 'relative',
+      }}
+    >
+      {/* Target handle pour les connexions entrantes */}
+      <Box
         sx={{
-          position: 'relative',
-          width: '100%',
-          minWidth: 200,
-          minHeight: 150,
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '20px',
           display: 'flex',
-          flexDirection: 'column',
-          borderRadius: 1,
-          border: '1px solid',
-          borderColor: selected ? 'primary.main' : 'divider',
-          overflow: 'hidden',
+          justifyContent: 'center',
+          transform: 'translateY(-50%)',
+          zIndex: 10,
         }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
       >
+        <Handle
+          type="target"
+          position={Position.Top}
+          id="default-handle"
+          style={{
+            background: '#1976d2',
+            width: 10,
+            height: 10,
+            border: '2px solid white',
+            zIndex: 10,
+            cursor: 'pointer',
+            visibility: 'visible',
+          }}
+          isConnectable={true}
+          isValidConnection={(connection) => {
+            console.log('Validating target connection:', connection);
+            // On accepte les connexions depuis n'importe quel handle
+            return true;
+          }}
+        />
+      </Box>
+
+      {/* Source handle pour les connexions sortantes par défaut */}
+      <Box
+        sx={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '20px',
+          display: 'flex',
+          justifyContent: 'center',
+          transform: 'translateY(50%)',
+          zIndex: 10,
+        }}
+      >
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          id="default-handle"
+          style={{
+            background: '#1976d2',
+            width: 10,
+            height: 10,
+            border: '2px solid white',
+            zIndex: 10,
+            cursor: 'pointer',
+            visibility: 'visible',
+          }}
+          isConnectable={true}
+          isValidConnection={(connection) => {
+            console.log('Validating source connection:', connection);
+            return true;
+          }}
+        />
+      </Box>
+
+      {/* Contenu du nœud */}
+      <Box sx={{ p: 2, position: 'relative' }}>
         {/* Media Display */}
         <Box 
           sx={{ 
             position: 'relative',
             width: '100%',
-            paddingBottom: '56.25%', // Ratio 16:9
-            flex: 1,
+            height: 0,
+            paddingBottom: '56.25%',
+            backgroundColor: 'grey.900',
+            borderRadius: 1,
+            overflow: 'hidden',
           }}
         >
           <Box
@@ -501,77 +387,44 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'center',
-              overflow: 'hidden',
             }}
           >
-            {data.mediaType === 'video' ? (
-              <video
-                ref={videoRef}
-                src={mediaUrl}
-                style={{ 
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                }}
-                controls={!data.isPlaybackMode}
-                onEnded={() => {
-                  if (data.onMediaEnd) {
-                    data.onMediaEnd(id);
-                  }
-                  if (data.content?.timer?.loop) {
-                    videoRef.current?.play();
-                  }
-                }}
-              />
-            ) : data.mediaType === 'image' ? (
-              <img
-                src={mediaUrl}
-                alt="Media content"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                }}
-              />
+            {error ? (
+              <Typography color="error">{error}</Typography>
+            ) : mediaUrl ? (
+              data.mediaType === 'video' ? (
+                <video
+                  src={mediaUrl}
+                  controls={!data.isPlaybackMode}
+                  autoPlay={data.isPlaybackMode}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  onLoadedData={() => setIsMediaLoaded(true)}
+                  onError={() => {
+                    setError('Failed to load video');
+                    setIsMediaLoaded(false);
+                  }}
+                  onEnded={handleVideoEnd}
+                  muted={data.isPlaybackMode}
+                />
+              ) : (
+                <img
+                  src={mediaUrl}
+                  alt="Media content"
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  onLoad={() => {
+                    setIsMediaLoaded(true);
+                    if (data.isPlaybackMode) {
+                      setShowButtons(true);
+                    }
+                  }}
+                  onError={() => {
+                    setError('Failed to load image');
+                    setIsMediaLoaded(false);
+                  }}
+                />
+              )
             ) : (
-              <Box
-                sx={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  bgcolor: 'background.default',
-                  color: 'text.secondary',
-                }}
-              >
-                {error ? (
-                  <Box sx={{ p: 2, textAlign: 'center' }}>
-                    <MovieIcon sx={{ fontSize: 40, mb: 1 }} />
-                    <div>{error}</div>
-                  </Box>
-                ) : (
-                  <Box sx={{ p: 2, textAlign: 'center' }}>
-                    <MovieIcon sx={{ fontSize: 40, mb: 1 }} />
-                    <div>Cliquez pour ajouter un média</div>
-                  </Box>
-                )}
-              </Box>
-            )}
-
-            {/* Audio Element */}
-            {audioUrl && (
-              <audio
-                ref={audioRef}
-                src={audioUrl}
-                loop={data.content?.audio?.loop}
-                muted={isMuted}
-                preload="auto"
-                onError={(e) => {
-                  console.error('Audio error:', e);
-                  setError('Failed to play audio');
-                }}
-              />
+              <Typography>No media selected</Typography>
             )}
 
             {/* Controls Overlay */}
@@ -579,63 +432,64 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
               <Box
                 sx={{
                   position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  p: 1,
+                  top: 8,
+                  right: 8,
                   display: 'flex',
-                  gap: 1,
-                  background: 'rgba(0, 0, 0, 0.5)',
-                  borderRadius: '0 0 0 4px',
+                  gap: 0.5,
+                  background: 'rgba(0, 0, 0, 0.7)',
+                  borderRadius: 1,
+                  padding: '4px',
+                  backdropFilter: 'blur(4px)',
+                  zIndex: 20,
                 }}
               >
-                <IconButton
-                  size="small"
-                  onClick={() => setIsMediaDialogOpen(true)}
-                  sx={{ bgcolor: 'background.paper' }}
-                >
-                  <EditIcon />
-                </IconButton>
-                {data.mediaType === 'image' && (
-                  <>
-                    <IconButton
-                      size="small"
-                      onClick={() => setIsTimerDialogOpen(true)}
-                      sx={{ bgcolor: 'background.paper' }}
-                    >
-                      <TimerIcon />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => setIsButtonDialogOpen(true)}
-                      sx={{ bgcolor: 'background.paper' }}
-                    >
-                      <SmartButtonIcon />
-                    </IconButton>
-                  </>
-                )}
-                <IconButton
-                  size="small"
-                  onClick={() => setIsAudioDialogOpen(true)}
-                  sx={{ bgcolor: 'background.paper' }}
-                >
-                  <MusicNoteIcon />
-                </IconButton>
+                <Tooltip title="Changer le média">
+                  <IconButton
+                    size="small"
+                    onClick={() => setIsMediaDialogOpen(true)}
+                    sx={{ color: 'white' }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                
+                <Tooltip title="Configuration audio">
+                  <IconButton
+                    size="small"
+                    onClick={() => setIsAudioDialogOpen(true)}
+                    sx={{ color: 'white' }}
+                  >
+                    <MusicNoteIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+
+                <Tooltip title="Gérer les boutons">
+                  <IconButton
+                    size="small"
+                    onClick={() => setIsButtonDialogOpen(true)}
+                    sx={{ color: 'white' }}
+                  >
+                    <SmartButtonIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
               </Box>
             )}
 
-            {/* Volume Controls */}
-            {(audioUrl || data.mediaType === 'video') && !data.isPlaybackMode && isHovered && (
+            {/* Audio Controls */}
+            {audioUrl && !data.isPlaybackMode && isHovered && (
               <Box
                 sx={{
                   position: 'absolute',
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  p: 1,
-                  bgcolor: 'rgba(0, 0, 0, 0.5)',
+                  bottom: 8,
+                  left: 8,
+                  right: 8,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 1,
+                  background: 'rgba(0, 0, 0, 0.7)',
+                  borderRadius: 1,
+                  padding: '4px 8px',
+                  backdropFilter: 'blur(4px)',
                 }}
               >
                 <IconButton
@@ -652,7 +506,7 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
                   min={0}
                   max={1}
                   step={0.1}
-                  sx={{
+                  sx={{ 
                     width: 100,
                     color: 'white',
                     '& .MuiSlider-thumb': {
@@ -666,76 +520,104 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
           </Box>
         </Box>
 
-        <Handle type="source" position={Position.Bottom} />
-      </Paper>
-
-      {/* Button Handles */}
-      {(!data.isPlaybackMode || showButtons) && data.content?.choices?.length > 0 && (
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 1,
-            p: 1,
-            width: '100%',
-            maxWidth: '300px',
-            margin: '8px auto 0',
-          }}
-        >
-          {data.content.choices.map((choice) => (
-            <Box
-              key={choice.id}
-              sx={{
-                position: 'relative',
-                width: '100%',
-              }}
-            >
-              <Handle
-                type="source"
-                position={Position.Right}
-                id={`button-handle-${choice.id}`}
-                style={{
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  right: '-15px',
-                  width: '15px',
-                  height: '15px',
-                  background: '#555',
-                  border: '2px solid #fff',
-                  zIndex: 1000,
-                  cursor: 'crosshair',
-                }}
-              />
-              <Button
-                variant="contained"
-                fullWidth
-                onClick={() => data.onChoiceSelect?.(id, choice)}
+        {/* Boutons de choix toujours visibles */}
+        {data.content?.choices && data.content.choices.length > 0 && (
+          <Box
+            sx={{
+              position: 'absolute',
+              bottom: '20%',
+              left: 0,
+              right: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+              alignItems: 'center',
+              p: 2,
+              zIndex: 1000,
+            }}
+          >
+            {data.content.choices.map((choice) => (
+              <Box
+                key={choice.id}
                 sx={{
-                  bgcolor: 'rgba(0, 0, 0, 0.75)',
-                  backdropFilter: 'blur(8px)',
-                  color: '#fff',
-                  border: '2px solid rgba(255, 255, 255, 0.5)',
-                  borderRadius: '8px',
-                  padding: '8px 16px',
-                  textTransform: 'none',
-                  fontSize: '0.9rem',
-                  '&:hover': {
-                    bgcolor: 'rgba(0, 0, 0, 0.9)',
-                    borderColor: 'white',
-                  },
                   position: 'relative',
-                  zIndex: 1,
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
                 }}
               >
-                {choice.text}
-              </Button>
-            </Box>
-          ))}
-        </Box>
-      )}
+                <Button
+                  variant="contained"
+                  onClick={() => data.onChoiceSelect?.(id, choice)}
+                  sx={{
+                    minWidth: '280px',
+                    height: '64px',
+                    fontSize: '1.2rem',
+                    fontWeight: 500,
+                    bgcolor: 'rgba(0, 0, 0, 0.75)',
+                    backdropFilter: 'blur(8px)',
+                    color: 'white',
+                    border: '2px solid rgba(255, 255, 255, 0.5)',
+                    borderRadius: '32px',
+                    textTransform: 'none',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+                    '&:hover': {
+                      bgcolor: 'rgba(0, 0, 0, 0.85)',
+                      border: '2px solid rgba(255, 255, 255, 0.8)',
+                      transform: 'scale(1.02)',
+                      boxShadow: '0 6px 16px rgba(0, 0, 0, 0.6)'
+                    },
+                    '&:active': {
+                      bgcolor: 'rgba(0, 0, 0, 0.95)',
+                      transform: 'scale(0.98)'
+                    }
+                  }}
+                >
+                  {choice.text}
+                </Button>
+                {!data.isPlaybackMode && (
+                  <Box 
+                    sx={{ 
+                      position: 'absolute',
+                      right: -20,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      zIndex: 1001,
+                    }}
+                  >
+                    <Handle
+                      type="source"
+                      position={Position.Right}
+                      id={`button-handle-${choice.id}`}
+                      style={{
+                        background: '#1976d2',
+                        width: 8,
+                        height: 8,
+                        border: '2px solid white',
+                        zIndex: 1001,
+                        cursor: 'pointer',
+                        visibility: 'visible',
+                      }}
+                      isConnectable={true}
+                      isValidConnection={(connection) => {
+                        console.log('Validating source connection:', {
+                          connection,
+                          handleId: `button-handle-${choice.id}`,
+                          nodeId: id
+                        });
+                        return true;
+                      }}
+                    />
+                  </Box>
+                )}
+              </Box>
+            ))}
+          </Box>
+        )}
+      </Box>
 
-      {/* Media Selection Dialog */}
+      {/* Dialogs */}
       <Dialog
         open={isMediaDialogOpen}
         onClose={() => setIsMediaDialogOpen(false)}
@@ -743,15 +625,14 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
         fullWidth
       >
         <DialogTitle>Select Media</DialogTitle>
-        <DialogContent sx={{ minHeight: '80vh', p: 0 }}>
+        <DialogContent>
           <MediaLibrary
             onSelect={handleMediaSelect}
-            acceptedTypes={['video/mp4', 'video/webm', 'image/jpeg', 'image/png', 'image/gif']}
+            acceptedTypes={['video/*', 'image/*']}
           />
         </DialogContent>
       </Dialog>
 
-      {/* Audio Selection Dialog */}
       <Dialog
         open={isAudioDialogOpen}
         onClose={() => setIsAudioDialogOpen(false)}
@@ -759,109 +640,76 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
         fullWidth
       >
         <DialogTitle>Select Audio</DialogTitle>
-        <DialogContent sx={{ minHeight: '80vh', p: 0 }}>
+        <DialogContent>
           <MediaLibrary
             onSelect={handleAudioSelect}
-            acceptedTypes={['audio/mpeg', 'audio/wav', 'audio/ogg']}
+            acceptedTypes={['audio/*']}
           />
         </DialogContent>
       </Dialog>
 
-      {/* Timer Settings Dialog */}
-      {data.mediaType === 'image' && (
-        <TimerSettings
-          open={isTimerDialogOpen}
-          onClose={() => setIsTimerDialogOpen(false)}
-          timer={{
-            duration: data.content?.timer?.duration ?? 5,
-            autoTransition: data.content?.timer?.autoTransition ?? false,
-            loop: data.content?.timer?.loop ?? false,
-          }}
-          onSave={handleTimerSave}
-        />
-      )}
-
-      {/* Button Editor Dialog */}
       <Dialog
         open={isButtonDialogOpen}
         onClose={() => setIsButtonDialogOpen(false)}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Gérer les Boutons</DialogTitle>
+        <DialogTitle>Button Configuration</DialogTitle>
         <DialogContent>
-          <Stack spacing={3}>
-            {/* Add new button */}
-            <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-              <TextField
-                fullWidth
-                label="Texte du bouton"
-                value={newButtonText}
-                onChange={(e) => setNewButtonText(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    handleAddButton();
-                  }
-                }}
-              />
-              <Tooltip title="Ajouter">
-                <IconButton
-                  onClick={handleAddButton}
-                  color="primary"
-                  disabled={!newButtonText.trim()}
-                >
-                  <AddIcon />
-                </IconButton>
-              </Tooltip>
-            </Box>
-
-            {/* Button list */}
-            <List>
-              {data.content?.choices?.map((choice) => (
-                <ListItem
-                  key={choice.id}
-                  sx={{
-                    bgcolor: 'background.paper',
-                    mb: 1,
-                    borderRadius: 1,
-                    border: '1px solid',
-                    borderColor: 'divider',
+          <Box sx={{ pt: 2 }}>
+            {editedChoices.map((choice, index) => (
+              <Box key={choice.id} sx={{ mb: 2, display: 'flex', gap: 1 }}>
+                <TextField
+                  fullWidth
+                  label={`Button ${index + 1} text`}
+                  value={choice.text}
+                  onChange={(event) => {
+                    const newChoices = [...editedChoices];
+                    newChoices[index] = { ...newChoices[index], text: event.target.value };
+                    setEditedChoices(newChoices);
                   }}
+                />
+                <IconButton
+                  onClick={() => {
+                    const newChoices = [...editedChoices];
+                    newChoices.splice(index, 1);
+                    setEditedChoices(newChoices);
+                  }}
+                  color="error"
+                  size="small"
                 >
-                  <TextField
-                    fullWidth
-                    value={choice.text}
-                    onChange={(e) => handleEditButtonText(choice.id, e.target.value)}
-                    variant="standard"
-                    sx={{ mr: 2 }}
-                  />
-                  <ListItemSecondaryAction>
-                    <Tooltip title="Supprimer">
-                      <IconButton
-                        edge="end"
-                        onClick={() => handleRemoveButton(choice.id)}
-                        color="error"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </ListItemSecondaryAction>
-                </ListItem>
-              ))}
-            </List>
-          </Stack>
+                  <DeleteIcon />
+                </IconButton>
+              </Box>
+            ))}
+            <Button
+              startIcon={<AddIcon />}
+              onClick={() => {
+                setEditedChoices([
+                  ...editedChoices,
+                  { id: crypto.randomUUID(), text: '' }
+                ]);
+              }}
+              sx={{ mt: 1 }}
+            >
+              Add Button
+            </Button>
+          </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setIsButtonDialogOpen(false)}>Fermer</Button>
+          <Button onClick={() => setIsButtonDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={() => {
+              handleButtonsChange(editedChoices);
+              setIsButtonDialogOpen(false);
+            }}
+            variant="contained"
+          >
+            Save
+          </Button>
         </DialogActions>
       </Dialog>
-
-      {error && (
-        <Box sx={{ mt: 2, color: 'error.main' }}>
-          {error}
-        </Box>
-      )}
-    </div>
+    </Paper>
   );
 };
 

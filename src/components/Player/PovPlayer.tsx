@@ -100,30 +100,34 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
     setCurrentNodeId(nextNodeId);
   }, []);
 
-  // Gérer la fin d'un média
-  const handleMediaEnd = useCallback(() => {
-    setMediaEnded(true);
-    const nextNodeId = findNextNode(currentNodeId || '', 'default-handle');
-    if (nextNodeId) {
-      handleTransition(nextNodeId);
-    }
-  }, [currentNodeId, findNextNode, handleTransition]);
-
   // Gérer un choix
   const handleChoice = useCallback((handleId: string) => {
+    console.log('Choice selected:', handleId);
     const nextNodeId = findNextNode(currentNodeId || '', handleId);
     if (nextNodeId) {
       handleTransition(nextNodeId);
     }
   }, [currentNodeId, findNextNode, handleTransition]);
 
+  // Gérer la fin d'un média
+  const handleMediaEnd = useCallback(() => {
+    console.log('Media ended');
+    setMediaEnded(true);
+    // Auto-sélection si un seul choix
+    if (choices.length === 1) {
+      handleChoice(choices[0].handleId);
+    }
+  }, [choices, handleChoice]);
+
   // Gérer la pause
   const handlePause = useCallback(() => {
+    console.log('Media paused');
     setIsPaused(true);
   }, []);
 
   // Gérer la reprise
   const handlePlay = useCallback(() => {
+    console.log('Media playing');
     setIsPaused(false);
   }, []);
 
@@ -136,20 +140,31 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
       if (!node) return;
 
       try {
+        console.log('Loading node:', node);
         // Réinitialiser les états
         setMediaUrl(null);
         setChoices([]);
         setMediaType(null);
+        setMediaEnded(false);
+        setIsPaused(false);
 
         // Charger le média principal
         if (node.data.mediaId && scenario.media?.[node.data.mediaId]) {
           const media = scenario.media[node.data.mediaId];
+          console.log('Loading media:', media);
           setMediaUrl(media.url);
-          setMediaType(media.metadata.type as 'video' | 'image');
+          const type = media.metadata.type as 'video' | 'image';
+          setMediaType(type);
+          // Pour les images, on considère qu'elles sont toujours "terminées"
+          if (type === 'image') {
+            setMediaEnded(true);
+          }
         } else if (node.data.content?.videoUrl) {
+          console.log('Loading video URL:', node.data.content.videoUrl);
           setMediaUrl(node.data.content.videoUrl);
           setMediaType('video');
         } else if (node.data.content?.video?.url) {
+          console.log('Loading video URL from content:', node.data.content.video.url);
           setMediaUrl(node.data.content.video.url);
           setMediaType('video');
         }
@@ -166,6 +181,7 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
               handleId: `button-handle-${choice.id}`,
             };
           });
+          console.log('Setting choices:', nodeChoices);
           setChoices(nodeChoices);
         }
       } catch (error) {
@@ -243,7 +259,7 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
         )}
 
         {/* Boutons de choix avec style amélioré */}
-        {choices.length > 0 && (mediaEnded || !mediaUrl || isPaused) && (
+        {choices.length > 0 && (mediaType === 'video' ? (mediaEnded || isPaused) : true) && (
           <Box
             sx={{
               position: 'fixed',

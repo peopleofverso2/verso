@@ -23,7 +23,9 @@ const NavbarContainer = styled(Box)(({ theme }) => ({
   zIndex: theme.zIndex.appBar,
 }));
 
-const NavButton = styled(IconButton)(({ theme, active }: { theme: any, active: boolean }) => ({
+const NavButton = styled(IconButton, {
+  shouldForwardProp: (prop) => prop !== 'active'
+})(({ theme, active }: { theme: any, active: boolean }) => ({
   color: active ? theme.palette.primary.main : 'rgba(255, 255, 255, 0.7)',
   width: '48px',
   height: '48px',

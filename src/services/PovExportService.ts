@@ -75,6 +75,7 @@ export class PovExportService {
 
   private async collectMediaFromNodes(nodes: Node[]): Promise<Record<string, MediaFile>> {
     const mediaIds = new Set<string>();
+    const missingMediaIds = new Set<string>();
     console.log('Collecting media from nodes:', nodes);
 
     // Collecter tous les IDs de médias des nœuds
@@ -82,7 +83,6 @@ export class PovExportService {
       if (node.data?.mediaId) {
         mediaIds.add(node.data.mediaId);
       }
-      // Ajouter la collecte des IDs audio
       if (node.data?.audioId) {
         console.log('Found audio ID:', node.data.audioId);
         mediaIds.add(node.data.audioId);
@@ -91,22 +91,37 @@ export class PovExportService {
 
     console.log('Media IDs found:', Array.from(mediaIds));
 
-    // Récupérer tous les médias
-    const mediaPromises = Array.from(mediaIds).map(async id => {
-      const media = await this.mediaLibrary.getMedia(id);
-      return media;
-    });
-
-    const mediaFiles = await Promise.all(mediaPromises);
-    console.log('Media collected:', mediaFiles);
-
-    // Créer un objet avec les médias indexés par ID
+    // Récupérer tous les médias avec gestion des erreurs
     const mediaMap: Record<string, MediaFile> = {};
-    mediaFiles.forEach(media => {
-      if (media) {
-        mediaMap[media.id] = media;
+    
+    await Promise.all(Array.from(mediaIds).map(async id => {
+      try {
+        const media = await this.mediaLibrary.getMedia(id);
+        if (media) {
+          mediaMap[media.id] = media;
+        } else {
+          missingMediaIds.add(id);
+          console.warn(`Media not found for ID: ${id}`);
+        }
+      } catch (error) {
+        missingMediaIds.add(id);
+        console.error(`Error loading media ${id}:`, error);
       }
-    });
+    }));
+
+    // Si des médias sont manquants, on le signale mais on continue
+    if (missingMediaIds.size > 0) {
+      console.warn('Some media files are missing:', Array.from(missingMediaIds));
+      // On met à jour les nœuds pour marquer les médias manquants
+      nodes.forEach(node => {
+        if (node.data?.mediaId && missingMediaIds.has(node.data.mediaId)) {
+          node.data.mediaError = `Media not found: ${node.data.mediaId}`;
+        }
+        if (node.data?.audioId && missingMediaIds.has(node.data.audioId)) {
+          node.data.audioError = `Audio not found: ${node.data.audioId}`;
+        }
+      });
+    }
 
     return mediaMap;
   }

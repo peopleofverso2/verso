@@ -7,7 +7,6 @@ import {
   IconButton,
   Box,
   CircularProgress,
-  CardActionArea,
   Dialog,
   Slide,
 } from '@mui/material';
@@ -188,10 +187,16 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   return (
     <>
       <Card>
-        <CardActionArea 
+        <Box 
           onClick={() => onProjectSelect(project.projectId)}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
+          sx={{ 
+            cursor: 'pointer',
+            '&:hover': {
+              bgcolor: 'action.hover'
+            }
+          }}
         >
           <Box sx={{ height: 140, bgcolor: 'background.paper', position: 'relative' }}>
             {isLoading ? (
@@ -258,7 +263,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               Modifié le {formatDate(project.updatedAt)}
             </Typography>
           </CardContent>
-        </CardActionArea>
+        </Box>
         <CardActions>
           <IconButton
             size="small"

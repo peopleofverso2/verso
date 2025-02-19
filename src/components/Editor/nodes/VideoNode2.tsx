@@ -48,6 +48,8 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
   const [showButtons, setShowButtons] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string>();
   const [error, setError] = useState<string>();
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [storageAdapter, setStorageAdapter] = useState<LocalStorageAdapter>();
 
@@ -86,11 +88,19 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
     loadVideo();
   }, [loadVideo]);
 
-  const handleVideoEnd = useCallback(() => {
-    if (data.onVideoEnd) {
-      data.onVideoEnd(id);
+  // Gestionnaire de mise à jour du temps
+  const handleTimeUpdate = useCallback(() => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime);
     }
-  }, [data.onVideoEnd, id]);
+  }, []);
+
+  // Gestionnaire de chargement des métadonnées
+  const handleLoadedMetadata = useCallback(() => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration);
+    }
+  }, []);
 
   const handleChoiceClick = useCallback((choice: any) => {
     if (data.onChoiceSelect) {
@@ -103,13 +113,27 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
     }
   }, [data.onChoiceSelect, id]);
 
+  const handleVideoEnd = useCallback(() => {
+    setIsPlaying(false);
+    setShowButtons(true);
+    if (data.onVideoEnd) {
+      data.onVideoEnd(id);
+    }
+    // Auto-sélection si un seul choix
+    if (data.isPlaybackMode && data.content?.choices && data.content.choices.length === 1) {
+      handleChoiceClick(data.content.choices[0]);
+    }
+  }, [data, id, handleChoiceClick]);
+
   const handlePlayPause = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
+        setShowButtons(true); 
       } else {
         videoRef.current.play();
+        setShowButtons(false); 
       }
       setIsPlaying(!isPlaying);
     }
@@ -180,6 +204,19 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
     }
   }, [id, data]);
 
+  useEffect(() => {
+    if (data.isPlaying && videoRef.current) {
+      videoRef.current.play().catch(error => {
+        console.error('Error playing video:', error);
+        setError('Failed to play video');
+      });
+      setIsPlaying(true);
+    } else if (!data.isPlaying && videoRef.current) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    }
+  }, [data.isPlaying]);
+
   const renderChoiceButtons = () => {
     if (!data.content?.choices) return null;
     
@@ -246,19 +283,6 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
       </Box>
     ));
   };
-
-  useEffect(() => {
-    if (data.isPlaying && videoRef.current) {
-      videoRef.current.play().catch(error => {
-        console.error('Error playing video:', error);
-        setError('Failed to play video');
-      });
-      setIsPlaying(true);
-    } else if (!data.isPlaying && videoRef.current) {
-      videoRef.current.pause();
-      setIsPlaying(false);
-    }
-  }, [data.isPlaying]);
 
   return (
     <div 
@@ -336,6 +360,8 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
                   display: 'block',
                   borderRadius: '8px 8px 0 0',
                 }}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
                 onEnded={handleVideoEnd}
                 controls={!data.isPlaybackMode}
                 playsInline
@@ -372,6 +398,25 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
                   </Box>
                 </Fade>
               )}
+              {/* Affichage des choix en mode lecture */}
+              {data.isPlaybackMode && data.content?.choices && data.content.choices.length > 0 && (showButtons || !isPlaying) && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    bottom: '20%',
+                    left: 0,
+                    right: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                    alignItems: 'center',
+                    p: 2,
+                    zIndex: 1000,
+                  }}
+                >
+                  {renderChoiceButtons()}
+                </Box>
+              )}
             </Box>
 
             <Box sx={{ p: 2, position: 'relative' }}>
@@ -399,7 +444,6 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
               )}
               {/* Affichage des choix avec leurs handles */}
               <Box sx={{ position: 'relative' }}>
-                {(data.isPlaybackMode && (!isPlaying || videoRef.current?.ended)) && renderChoiceButtons()}
                 {!data.isPlaybackMode && renderChoiceButtons()}
               </Box>
             </Box>
@@ -410,7 +454,7 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
       <Dialog
         open={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
-        maxWidth="md"
+        maxWidth="sm"
         fullWidth
       >
         <DialogTitle>Select Video</DialogTitle>
@@ -461,7 +505,17 @@ export default function VideoNode2({ id, data, selected }: VideoNodeProps) {
       </Dialog>
 
       {error && (
-        <Box sx={{ mt: 2, color: 'error.main' }}>
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: -40,
+            left: 0,
+            right: 0,
+            color: 'error.main',
+            textAlign: 'center',
+            fontSize: '0.875rem',
+          }}
+        >
           {error}
         </Box>
       )}
