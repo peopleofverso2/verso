@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Grid,
@@ -61,6 +61,21 @@ export default function MediaLibrary({
     message: '',
     severity: 'success'
   });
+  const [mediaLibrary, setMediaLibrary] = useState<MediaLibraryService | null>(null);
+
+  useEffect(() => {
+    const initMediaLibrary = async () => {
+      try {
+        const service = await MediaLibraryService.getInstance();
+        await service.initialize();
+        setMediaLibrary(service);
+      } catch (error) {
+        console.error('Error initializing media library:', error);
+      }
+    };
+    
+    initMediaLibrary();
+  }, []);
 
   // Filtrer les médias en fonction du type sélectionné et de la recherche
   const filteredMedia = useMemo(() => {
@@ -89,8 +104,10 @@ export default function MediaLibrary({
         console.log('Starting media loading...');
         console.log('Accepted types:', acceptedTypes);
         
-        const mediaLibrary = await MediaLibraryService.getInstance();
-        console.log('MediaLibrary instance obtained');
+        if (!mediaLibrary) {
+          console.error('Media library not initialized');
+          return;
+        }
         
         const mediaFiles = await mediaLibrary.listMedia(filter);
         console.log('Raw media files:', mediaFiles);
@@ -132,11 +149,14 @@ export default function MediaLibrary({
       }
     };
     loadMedia();
-  }, [filter, acceptedTypes]);
+  }, [filter, acceptedTypes, mediaLibrary]);
 
-  const handleUpload = async (files: File[]) => {
+  const handleUpload = useCallback(async (files: File[]) => {
     try {
-      const mediaLibrary = await MediaLibraryService.getInstance();
+      if (!mediaLibrary) {
+        console.error('Media library not initialized');
+        return;
+      }
       for (const file of files) {
         await mediaLibrary.uploadMedia(file);
       }
@@ -159,11 +179,14 @@ export default function MediaLibrary({
       });
     }
     setUploadOpen(false);
-  };
+  }, [mediaLibrary, filter]);
 
   const handleDelete = async (mediaFile: MediaFile) => {
     try {
-      const mediaLibrary = await MediaLibraryService.getInstance();
+      if (!mediaLibrary) {
+        console.error('Media library not initialized');
+        return;
+      }
       await mediaLibrary.deleteMedia(mediaFile.metadata.id);
       setSelectedMedia(prev => {
         const next = new Set(prev);

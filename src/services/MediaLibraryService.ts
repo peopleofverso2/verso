@@ -4,6 +4,9 @@ import { resizeImage, ResizeOptions } from '../utils/imageResizer';
 
 export class MediaLibraryService {
   private static instance: MediaLibraryService;
+  private adapter: LocalStorageAdapter;
+  private initialized: boolean = false;
+  private initializationPromise: Promise<void> | null = null;
   private storageAdapter: MediaStorageAdapter;
   private urlCache: Map<string, string> = new Map();
 
@@ -15,19 +18,51 @@ export class MediaLibraryService {
   };
 
   private constructor() {
-    // L'adaptateur sera initialisé dans init()
+    this.adapter = new LocalStorageAdapter();
   }
 
-  public static async getInstance(adapter?: MediaStorageAdapter): Promise<MediaLibraryService> {
+  public static getInstance(): MediaLibraryService {
     if (!MediaLibraryService.instance) {
       MediaLibraryService.instance = new MediaLibraryService();
-      await MediaLibraryService.instance.init(adapter);
     }
     return MediaLibraryService.instance;
   }
 
-  private async init(adapter?: MediaStorageAdapter) {
-    this.storageAdapter = adapter || await LocalStorageAdapter.getInstance();
+  public async initialize(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    this.initializationPromise = new Promise(async (resolve, reject) => {
+      try {
+        console.log('Initializing MediaLibraryService...');
+        await this.adapter.initialize();
+        this.storageAdapter = this.adapter;
+        this.initialized = true;
+        console.log('MediaLibraryService initialized successfully');
+        resolve();
+      } catch (error) {
+        console.error('Error initializing MediaLibraryService:', error);
+        this.initialized = false;
+        this.initializationPromise = null;
+        reject(error);
+      }
+    });
+
+    return this.initializationPromise;
+  }
+
+  public async getAdapter(): Promise<LocalStorageAdapter> {
+    await this.initialize();
+    return this.adapter;
+  }
+
+  public isInitialized(): boolean {
+    return this.initialized;
   }
 
   setStorageAdapter(adapter: MediaStorageAdapter) {

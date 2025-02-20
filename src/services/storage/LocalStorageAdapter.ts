@@ -21,6 +21,36 @@ export class LocalStorageAdapter implements MediaStorageAdapter {
     LocalStorageAdapter.instance = this;
   }
 
+  public async initialize(): Promise<void> {
+    try {
+      console.log('LocalStorageAdapter: Initializing...');
+      await this.getDb();
+      console.log('LocalStorageAdapter: Initialized successfully');
+    } catch (error) {
+      console.error('LocalStorageAdapter: Initialization failed:', error);
+      throw error;
+    }
+  }
+
+  private async getDb(): Promise<IDBPDatabase> {
+    if (!this.dbPromise) {
+      this.dbPromise = openDB(LocalStorageAdapter.DB_NAME, LocalStorageAdapter.DB_VERSION, {
+        upgrade(db) {
+          if (!db.objectStoreNames.contains(LocalStorageAdapter.MEDIA_STORE)) {
+            db.createObjectStore(LocalStorageAdapter.MEDIA_STORE);
+          }
+          if (!db.objectStoreNames.contains(LocalStorageAdapter.METADATA_STORE)) {
+            db.createObjectStore(LocalStorageAdapter.METADATA_STORE);
+          }
+          if (!db.objectStoreNames.contains(LocalStorageAdapter.THUMBNAIL_STORE)) {
+            db.createObjectStore(LocalStorageAdapter.THUMBNAIL_STORE);
+          }
+        },
+      });
+    }
+    return this.dbPromise;
+  }
+
   private async resetDatabase() {
     try {
       this.clearUrlCaches();
@@ -60,41 +90,6 @@ export class LocalStorageAdapter implements MediaStorageAdapter {
     this.thumbnailUrlCache.clear();
     
     console.log('LocalStorageAdapter: URL caches cleared');
-  }
-
-  private async getDb(): Promise<IDBPDatabase> {
-    if (!this.dbPromise) {
-      console.log('Opening database...');
-      this.dbPromise = openDB(LocalStorageAdapter.DB_NAME, LocalStorageAdapter.DB_VERSION, {
-        upgrade(db, oldVersion, newVersion, transaction) {
-          console.log(`Upgrading database from version ${oldVersion} to ${newVersion}`);
-          
-          // Créer les stores s'ils n'existent pas
-          if (!db.objectStoreNames.contains(LocalStorageAdapter.MEDIA_STORE)) {
-            console.log('Creating media store');
-            db.createObjectStore(LocalStorageAdapter.MEDIA_STORE);
-          }
-          if (!db.objectStoreNames.contains(LocalStorageAdapter.METADATA_STORE)) {
-            console.log('Creating metadata store');
-            db.createObjectStore(LocalStorageAdapter.METADATA_STORE);
-          }
-          if (!db.objectStoreNames.contains(LocalStorageAdapter.THUMBNAIL_STORE)) {
-            console.log('Creating thumbnail store');
-            db.createObjectStore(LocalStorageAdapter.THUMBNAIL_STORE);
-          }
-        },
-        blocked() {
-          console.warn('Database upgrade blocked. Please close other tabs using the app.');
-        },
-        blocking() {
-          console.warn('Database blocking other connections. Closing...');
-        },
-        terminated() {
-          console.error('Database connection terminated unexpectedly.');
-        }
-      });
-    }
-    return this.dbPromise;
   }
 
   private generateId(): string {

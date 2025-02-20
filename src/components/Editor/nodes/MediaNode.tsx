@@ -75,7 +75,7 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
   const [isTimerDialogOpen, setIsTimerDialogOpen] = useState(false);
   const [isButtonDialogOpen, setIsButtonDialogOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>();
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -92,52 +92,42 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
   // New state for button management
   const [newButtonText, setNewButtonText] = useState('');
 
-  // Load media on mount and when mediaId changes
+  // Media Library state
+  const [mediaLibrary, setMediaLibrary] = useState<MediaLibraryService | null>(null);
+  const [media, setMedia] = useState<MediaFile | null>(null);
+
+  useEffect(() => {
+    const initMediaLibrary = async () => {
+      try {
+        const service = await MediaLibraryService.getInstance();
+        await service.initialize();
+        setMediaLibrary(service);
+      } catch (error) {
+        console.error('Error initializing media library:', error);
+        setError('Failed to initialize media library');
+      }
+    };
+    
+    initMediaLibrary();
+  }, []);
+
   useEffect(() => {
     const loadMedia = async () => {
-      if (!data.mediaId) {
-        setMediaUrl(undefined);
-        setDimensions(undefined);
-        return;
-      }
+      if (!mediaLibrary || !data.mediaId) return;
+      
       try {
         console.log('Loading media for node:', id);
-        const mediaLibrary = await MediaLibraryService.getInstance();
-        const media = await mediaLibrary.getMedia(data.mediaId);
-        console.log('Media loaded:', media);
-        
-        if (media && media.url) {
-          setMediaUrl(media.url);
-          if (media.metadata.dimensions) {
-            setDimensions(media.metadata.dimensions);
-          }
-          if (media.metadata.type) {
-            data.onDataChange?.(id, {
-              ...data,
-              mediaType: media.metadata.type
-            });
-          }
-          setError(undefined);
-        } else {
-          console.error('Media or URL is missing');
-          setError('Media not found');
-        }
+        const mediaFile = await mediaLibrary.getMedia(data.mediaId);
+        setMedia(mediaFile);
+        setError(null);
       } catch (error) {
         console.error('Error loading media:', error);
         setError('Failed to load media');
       }
     };
+
     loadMedia();
-    
-    // Cleanup function
-    return () => {
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.src = '';
-        videoRef.current.load();
-      }
-    };
-  }, [data.mediaId, id]);
+  }, [mediaLibrary, data.mediaId, id]);
 
   // Load audio on mount and when audioId changes
   useEffect(() => {
@@ -147,11 +137,10 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
         return;
       }
       try {
-        const mediaLibrary = await MediaLibraryService.getInstance();
-        const audio = await mediaLibrary.getMedia(data.audioId);
+        const audio = await mediaLibrary?.getMedia(data.audioId);
         if (audio && audio.url) {
           setAudioUrl(audio.url);
-          setError(undefined);
+          setError(null);
         }
       } catch (error) {
         console.error('Error loading audio:', error);
@@ -168,7 +157,7 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
         audioRef.current.load();
       }
     };
-  }, [data.audioId]);
+  }, [data.audioId, mediaLibrary]);
 
   // Playback control effect
   useEffect(() => {

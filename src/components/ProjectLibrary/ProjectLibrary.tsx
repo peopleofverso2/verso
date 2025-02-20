@@ -152,7 +152,17 @@ export const ProjectLibrary: React.FC = () => {
   const [mediaLibrary, setMediaLibrary] = useState<MediaLibraryService | null>(null);
 
   useEffect(() => {
-    MediaLibraryService.getInstance().then(setMediaLibrary);
+    const initMediaLibrary = async () => {
+      try {
+        const service = MediaLibraryService.getInstance();
+        await service.initialize();
+        setMediaLibrary(service);
+      } catch (error) {
+        console.error('Error initializing media library:', error);
+      }
+    };
+    
+    initMediaLibrary();
   }, []);
 
   const getMediaUrl = useCallback(async (mediaId: string) => {
