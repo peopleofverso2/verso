@@ -124,8 +124,21 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
 
       <CardContent sx={{ flexGrow: 1 }}>
         <Typography variant="h6" component="h2" gutterBottom noWrap>
-          {project.scenario?.scenarioTitle || 'Sans titre'}
+          {project.scenario?.povTitle || 'Sans titre'}
         </Typography>
+        {project.scenario?.scenarioTitle && (
+          <Typography 
+            variant="subtitle2" 
+            color="text.secondary" 
+            sx={{ 
+              mb: 1,
+              fontStyle: 'italic'
+            }} 
+            noWrap
+          >
+            {project.scenario.scenarioTitle}
+          </Typography>
+        )}
         {project.scenario?.description && (
           <Typography variant="body2" color="text.secondary" sx={{
             overflow: 'hidden',
