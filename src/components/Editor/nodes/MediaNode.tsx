@@ -68,8 +68,9 @@ interface MediaNodeProps {
 
 const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
   // Media states
-  const [mediaUrl, setMediaUrl] = useState<string>();
-  const [audioUrl, setAudioUrl] = useState<string>();
+  const [mediaLibrary, setMediaLibrary] = useState<MediaLibraryService | null>(null);
+  const [media, setMedia] = useState<MediaFile | null>(null);
+  const [mediaUrl, setMediaUrl] = useState<string | undefined>();
   const [isMediaDialogOpen, setIsMediaDialogOpen] = useState(false);
   const [isAudioDialogOpen, setIsAudioDialogOpen] = useState(false);
   const [isTimerDialogOpen, setIsTimerDialogOpen] = useState(false);
@@ -80,6 +81,7 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Audio states
+  const [audioUrl, setAudioUrl] = useState<string | undefined>();
   const [volume, setVolume] = useState(data.content?.audio?.volume ?? 1);
   const [isMuted, setIsMuted] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -92,14 +94,10 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
   // New state for button management
   const [newButtonText, setNewButtonText] = useState('');
 
-  // Media Library state
-  const [mediaLibrary, setMediaLibrary] = useState<MediaLibraryService | null>(null);
-  const [media, setMedia] = useState<MediaFile | null>(null);
-
   useEffect(() => {
     const initMediaLibrary = async () => {
       try {
-        const service = await MediaLibraryService.getInstance();
+        const service = MediaLibraryService.getInstance();
         await service.initialize();
         setMediaLibrary(service);
       } catch (error) {
@@ -113,51 +111,76 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
 
   useEffect(() => {
     const loadMedia = async () => {
-      if (!mediaLibrary || !data.mediaId) return;
+      if (!mediaLibrary || !data.mediaId) {
+        setMediaUrl(undefined);
+        setMedia(null);
+        return;
+      }
       
       try {
         console.log('Loading media for node:', id);
         const mediaFile = await mediaLibrary.getMedia(data.mediaId);
         setMedia(mediaFile);
+        if (mediaFile && mediaFile.url) {
+          setMediaUrl(mediaFile.url);
+          if (mediaFile.metadata.dimensions) {
+            setDimensions(mediaFile.metadata.dimensions);
+          }
+          if (mediaFile.metadata.type) {
+            data.onDataChange?.(id, {
+              ...data,
+              mediaType: mediaFile.metadata.type
+            });
+          }
+        }
         setError(null);
       } catch (error) {
         console.error('Error loading media:', error);
         setError('Failed to load media');
+        setMediaUrl(undefined);
+        setMedia(null);
       }
     };
 
     loadMedia();
-  }, [mediaLibrary, data.mediaId, id]);
+
+    // Cleanup function to revoke object URLs
+    return () => {
+      if (mediaUrl) {
+        URL.revokeObjectURL(mediaUrl);
+      }
+    };
+  }, [mediaLibrary, data.mediaId, id, data.onDataChange]);
 
   // Load audio on mount and when audioId changes
   useEffect(() => {
     const loadAudio = async () => {
-      if (!data.audioId) {
+      if (!mediaLibrary || !data.audioId) {
         setAudioUrl(undefined);
         return;
       }
       try {
-        const audio = await mediaLibrary?.getMedia(data.audioId);
-        if (audio && audio.url) {
-          setAudioUrl(audio.url);
+        const audioFile = await mediaLibrary.getMedia(data.audioId);
+        if (audioFile && audioFile.url) {
+          setAudioUrl(audioFile.url);
           setError(null);
         }
       } catch (error) {
         console.error('Error loading audio:', error);
         setError('Failed to load audio');
+        setAudioUrl(undefined);
       }
     };
+
     loadAudio();
-    
-    // Cleanup function
+
+    // Cleanup function to revoke object URLs
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-        audioRef.current.load();
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
       }
     };
-  }, [data.audioId, mediaLibrary]);
+  }, [mediaLibrary, data.audioId]);
 
   // Playback control effect
   useEffect(() => {
