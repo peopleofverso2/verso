@@ -100,21 +100,40 @@ const MinipovPlayer: React.FC<MinipovPlayerProps> = ({
     );
   }
 
+  // Créer une URL valide pour le média
+  const mediaUrl = currentMedia.url;
+  if (!mediaUrl) {
+    console.error('No URL for media:', currentMedia);
+    return null;
+  }
+
   return (
     <PlayerContainer>
-      <Box
-        component={currentMedia.type === 'video' ? 'video' : 'img'}
-        src={currentMedia.url}
-        sx={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover'
-        }}
-        autoPlay={isPlaying}
-        muted
-        loop={false}
-        onEnded={handleNext}
-      />
+      {currentMedia.type === 'video' ? (
+        <Box
+          component="video"
+          src={mediaUrl}
+          sx={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover'
+          }}
+          autoPlay={isPlaying}
+          muted
+          loop={false}
+          onEnded={handleNext}
+        />
+      ) : currentMedia.type === 'image' ? (
+        <Box
+          component="img"
+          src={mediaUrl}
+          sx={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover'
+          }}
+        />
+      ) : null}
 
       <Controls>
         <Box sx={{ flexGrow: 1 }}>

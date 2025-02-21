@@ -47,6 +47,9 @@ interface PovNodeData {
     media: Record<string, any>;
   };
   onDataChange: (nodeId: string, data: any) => void;
+  isPlaybackMode?: boolean;
+  isCurrentNode?: boolean;
+  isPlaying?: boolean;
 }
 
 const PovNode: React.FC<{ data: PovNodeData; id: string }> = ({ data, id }) => {
@@ -145,6 +148,20 @@ const PovNode: React.FC<{ data: PovNodeData; id: string }> = ({ data, id }) => {
             <UploadIcon sx={{ fontSize: '1rem' }} />
           </IconButton>
         </Tooltip>
+        {data.povFile && (
+          <Tooltip title={isPlaying ? 'Pause' : 'Play'}>
+            <IconButton
+              size="small"
+              onClick={togglePlayback}
+            >
+              {isPlaying ? (
+                <PauseIcon sx={{ fontSize: '1rem' }} />
+              ) : (
+                <PlayIcon sx={{ fontSize: '1rem' }} />
+              )}
+            </IconButton>
+          </Tooltip>
+        )}
         <input
           ref={fileInputRef}
           type="file"
@@ -156,58 +173,29 @@ const PovNode: React.FC<{ data: PovNodeData; id: string }> = ({ data, id }) => {
 
       <PreviewContainer>
         {data.povFile ? (
-          <>
-            <MinipovPlayer
-              nodes={data.povFile.nodes}
-              edges={data.povFile.edges}
-              media={data.povFile.media}
-              isPlaying={isPlaying}
-              onComplete={() => setIsPlaying(false)}
-            />
-            <IconButton
-              size="small"
-              onClick={togglePlayback}
-              sx={{
-                position: 'absolute',
-                bottom: 8,
-                right: 8,
-                backgroundColor: 'rgba(0, 0, 0, 0.6)',
-                '&:hover': {
-                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                },
-                color: 'white',
-              }}
-            >
-              {isPlaying ? <PauseIcon /> : <PlayIcon />}
-            </IconButton>
-          </>
+          <MinipovPlayer
+            nodes={data.povFile.nodes}
+            edges={data.povFile.edges}
+            media={data.povFile.media}
+            isPlaying={isPlaying}
+            onComplete={() => setIsPlaying(false)}
+          />
         ) : (
           <Box
             sx={{
+              width: '100%',
               height: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              color: 'text.secondary',
+              fontSize: '0.8rem'
             }}
           >
-            <Button
-              variant="outlined"
-              startIcon={<UploadIcon />}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              Importer un POV
-            </Button>
+            Importez un fichier POV
           </Box>
         )}
       </PreviewContainer>
-
-      {data.povFile && (
-        <Box sx={{ mt: 1 }}>
-          <Typography variant="caption" color="text.secondary" display="block">
-            {data.povFile.nodes.length} nœuds • {Object.keys(data.povFile.media).length} médias
-          </Typography>
-        </Box>
-      )}
 
       {/* Handle de sortie */}
       <Handle
