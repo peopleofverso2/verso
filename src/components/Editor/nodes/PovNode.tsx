@@ -39,66 +39,78 @@ const PreviewContainer = styled(Box)({
 
 interface PovNodeData {
   id: string;
+  label: string;
   povFile?: {
     title: string;
     nodes: any[];
     edges: any[];
     media: Record<string, any>;
   };
-  onDataChange?: (nodeId: string, data: any) => void;
+  onDataChange: (nodeId: string, data: any) => void;
 }
 
-const PovNode: React.FC<{ data: PovNodeData }> = ({ data }) => {
+const PovNode: React.FC<{ data: PovNodeData; id: string }> = ({ data, id }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const povService = PovExportService.getInstance();
 
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      console.log('No file selected');
+      return;
+    }
+
+    console.log('Starting POV file import:', file.name);
 
     try {
+      console.log('Importing POV file using service...');
       const povData = await povService.importFromPovFile(file);
-      console.log('Imported POV data:', povData);
+      console.log('POV data imported successfully:', povData);
       
       // Mettre à jour les données du node
-      if (data.onDataChange) {
-        data.onDataChange(data.id, {
-          ...data,
-          povFile: {
-            title: file.name.replace('.pov', ''),
-            nodes: povData.nodes.map(node => ({
-              ...node,
-              position: node.position || { x: 0, y: 0 }, // S'assurer que la position est définie
-              data: {
-                ...node.data,
-                mediaId: node.data?.mediaId,
-                content: {
-                  ...node.data?.content,
-                  choices: node.data?.content?.choices || [],
-                }
+      console.log('Updating node data with id:', id);
+      const updatedData = {
+        ...data,
+        label: file.name.replace('.pov', ''),
+        povFile: {
+          title: file.name.replace('.pov', ''),
+          nodes: povData.nodes.map(node => ({
+            ...node,
+            position: node.position || { x: 0, y: 0 },
+            data: {
+              ...node.data,
+              mediaId: node.data?.mediaId,
+              content: {
+                ...node.data?.content,
+                choices: node.data?.content?.choices || [],
               }
-            })),
-            edges: povData.edges.map(edge => ({
-              ...edge,
-              sourceHandle: edge.sourceHandle || undefined,
-              data: edge.data || {}
-            })),
-            media: povData.media
-          }
-        });
-      }
+            }
+          })),
+          edges: povData.edges.map(edge => ({
+            ...edge,
+            sourceHandle: edge.sourceHandle || undefined,
+            data: edge.data || {}
+          })),
+          media: povData.media
+        }
+      };
+      console.log('Updated data:', updatedData);
+      data.onDataChange(id, updatedData);
+      console.log('Node data updated successfully');
     } catch (error) {
       console.error('Error importing POV file:', error);
     }
 
     // Reset input
     event.target.value = '';
-  }, [data, povService]);
+  }, [data, povService, id]);
 
   const togglePlayback = useCallback(() => {
     setIsPlaying(!isPlaying);
   }, [isPlaying]);
+
+  console.log('Current PovNode data:', data);
 
   return (
     <StyledPaper elevation={3}>

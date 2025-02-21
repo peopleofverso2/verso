@@ -368,16 +368,20 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
         y: event.clientY,
       });
 
+      const nodeId = getId();
+      console.log('Creating new node with id:', nodeId);
+
       const newNode: Node = {
-        id: getId(),
+        id: nodeId,
         type,
         position,
         data: { 
+          id: nodeId,
           label: type === 'mediaNode' ? 'Media Node' : type === 'povNode' ? 'POV Node' : `${type} node`,
           onDataChange: handleNodeDataChange,
           onVideoEnd,
           onChoiceSelect: handleChoiceSelect,
-          getConnectedNodeId: (buttonId: string) => getConnectedNodeId(getId(), buttonId),
+          getConnectedNodeId: (buttonId: string) => getConnectedNodeId(nodeId, buttonId),
           // Initialiser avec un objet povFile vide pour les PovNodes
           ...(type === 'povNode' ? {
             povFile: null,
