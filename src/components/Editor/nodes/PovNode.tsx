@@ -18,23 +18,22 @@ import { styled } from '@mui/material/styles';
 import MinipovPlayer from './MinipovPlayer';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(2),
+  padding: theme.spacing(1),
   backgroundColor: theme.palette.background.paper,
-  borderRadius: theme.shape.borderRadius,
-  width: 300,
-  minHeight: 200,
+  width: '300px',
+  minHeight: '200px',
   display: 'flex',
-  flexDirection: 'column',
+  flexDirection: 'column'
 }));
 
-const PreviewContainer = styled(Box)({
+const PreviewContainer = styled('div')({
+  flexGrow: 1,
+  minHeight: '200px',
   width: '100%',
-  height: 150,
   position: 'relative',
+  borderRadius: '4px',
   overflow: 'hidden',
-  borderRadius: 4,
   backgroundColor: '#000',
-  marginBottom: 8,
 });
 
 interface PovNodeData {
@@ -111,6 +110,7 @@ const PovNode: React.FC<{ data: PovNodeData; id: string }> = ({ data, id }) => {
   }, [isPlaying]);
 
   console.log('Current PovNode data:', data);
+  console.log('Current PovNode media:', data.povFile?.media);
 
   return (
     <StyledPaper elevation={3}>
