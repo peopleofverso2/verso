@@ -138,6 +138,8 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
   }, [edges]);
 
   const handleNodeDataChange = useCallback((nodeId: string, newData: any) => {
+    console.log('Node data change:', { nodeId, newData });
+    
     // Si on a un nextNodeId en mode lecture, activer le nœud suivant
     if (newData.nextNodeId && isPlaybackMode) {
       setActiveNodeId(newData.nextNodeId);
@@ -148,7 +150,7 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
     setNodes((nds) =>
       nds.map((node) => {
         if (node.id === nodeId) {
-          return {
+          const updatedNode = {
             ...node,
             data: {
               ...node.data,
@@ -159,6 +161,8 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
               getConnectedNodeId: (buttonId: string) => getConnectedNodeId(nodeId, buttonId),
             },
           };
+          console.log('Updated node:', updatedNode);
+          return updatedNode;
         }
         return node;
       })
@@ -356,6 +360,7 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
       if (!reactFlowWrapper.current) return;
 
       const type = event.dataTransfer.getData('application/reactflow');
+      console.log('Dropped node type:', type);
       if (!type) return;
 
       const position = screenToFlowPosition({
@@ -372,22 +377,31 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
           onDataChange: handleNodeDataChange,
           onVideoEnd,
           onChoiceSelect: handleChoiceSelect,
-          mediaId: undefined,
-          content: {
-            choices: [],
-            timer: {
-              duration: 0,
-              autoTransition: false,
-              loop: false
-            }
-          },
-          isPlaybackMode: false,
-          isCurrentNode: false,
-          isPlaying: false,
           getConnectedNodeId: (buttonId: string) => getConnectedNodeId(getId(), buttonId),
+          // Initialiser avec un objet povFile vide pour les PovNodes
+          ...(type === 'povNode' ? {
+            povFile: null,
+            isPlaybackMode: false,
+            isCurrentNode: false,
+            isPlaying: false,
+          } : {
+            mediaId: undefined,
+            content: {
+              choices: [],
+              timer: {
+                duration: 0,
+                autoTransition: false,
+                loop: false
+              }
+            },
+            isPlaybackMode: false,
+            isCurrentNode: false,
+            isPlaying: false,
+          })
         },
       };
 
+      console.log('Creating new node:', newNode);
       setNodes((nds) => nds.concat(newNode));
     },
     [screenToFlowPosition, handleNodeDataChange, getConnectedNodeId, onVideoEnd, handleChoiceSelect]
