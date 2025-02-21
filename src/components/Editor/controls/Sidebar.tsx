@@ -25,27 +25,29 @@ import {
 
 const SidebarContainer = styled(Paper)(({ theme }) => ({
   position: 'absolute',
-  top: theme.spacing(2),
-  right: theme.spacing(2),
-  padding: theme.spacing(2),
+  top: theme.spacing(1),
+  right: theme.spacing(1),
+  padding: theme.spacing(1.5),
   display: 'flex',
   flexDirection: 'column',
-  gap: theme.spacing(2),
+  gap: theme.spacing(1.5),
   backgroundColor: alpha(theme.palette.background.paper, 0.95),
   backdropFilter: 'blur(8px)',
-  borderRadius: theme.shape.borderRadius * 2,
+  borderRadius: theme.shape.borderRadius * 1.5,
   boxShadow: theme.shadows[8],
-  width: '320px',
+  width: '280px',
   zIndex: 1000,
   border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+  maxHeight: 'calc(100vh - ${theme.spacing(2)})',
+  overflowY: 'auto',
 }));
 
 const DraggableNode = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(1.5),
-  marginBottom: theme.spacing(1),
+  padding: theme.spacing(1),
+  marginBottom: theme.spacing(0.5),
   display: 'flex',
   alignItems: 'center',
-  gap: theme.spacing(1.5),
+  gap: theme.spacing(1),
   cursor: 'grab',
   backgroundColor: theme.palette.background.paper,
   borderRadius: theme.shape.borderRadius,
@@ -157,7 +159,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Section actions POV */}
         <Box sx={{ 
-          p: 1.5, 
+          p: 1, 
           bgcolor: 'background.default',
           borderRadius: 1,
           border: '1px solid',
@@ -167,31 +169,37 @@ const Sidebar: React.FC<SidebarProps> = ({
             variant="subtitle2" 
             sx={{ 
               color: 'text.secondary', 
-              mb: 1.5,
+              mb: 1,
               fontWeight: 600,
-              fontSize: '0.875rem'
+              fontSize: '0.8rem'
             }}
           >
             Actions POV
           </Typography>
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={0.5}>
             <Button
               variant="outlined"
-              startIcon={<UploadIcon />}
+              startIcon={<UploadIcon sx={{ fontSize: '1rem' }} />}
               onClick={() => fileInputRef.current?.click()}
               size="small"
               fullWidth
-              sx={{ fontSize: '0.75rem' }}
+              sx={{ 
+                fontSize: '0.7rem',
+                py: 0.5
+              }}
             >
               Importer
             </Button>
             <Button
               variant="outlined"
-              startIcon={<DownloadIcon />}
+              startIcon={<DownloadIcon sx={{ fontSize: '1rem' }} />}
               onClick={onExportPov}
               size="small"
               fullWidth
-              sx={{ fontSize: '0.75rem' }}
+              sx={{ 
+                fontSize: '0.7rem',
+                py: 0.5
+              }}
             >
               Exporter
             </Button>
@@ -301,7 +309,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Section lecture */}
         <Box sx={{ 
-          p: 1.5, 
+          p: 1, 
           bgcolor: 'background.default',
           borderRadius: 1,
           border: '1px solid',
@@ -311,20 +319,23 @@ const Sidebar: React.FC<SidebarProps> = ({
             variant="subtitle2" 
             sx={{ 
               color: 'text.secondary', 
-              mb: 1.5,
+              mb: 1,
               fontWeight: 600,
-              fontSize: '0.875rem'
+              fontSize: '0.8rem'
             }}
           >
             Lecture
           </Typography>
           <Button
             variant="contained"
-            startIcon={isPlaybackMode ? <StopIcon /> : <PlayIcon />}
+            startIcon={isPlaybackMode ? <StopIcon sx={{ fontSize: '1rem' }} /> : <PlayIcon sx={{ fontSize: '1rem' }} />}
             onClick={isPlaybackMode ? onStopPlayback : onStartPlayback}
             fullWidth
             size="small"
-            sx={{ fontSize: '0.75rem' }}
+            sx={{ 
+              fontSize: '0.7rem',
+              py: 0.5
+            }}
           >
             {isPlaybackMode ? 'Arrêter' : 'Lancer'}
           </Button>
@@ -333,20 +344,19 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Section noeuds disponibles */}
         <Box>
           <Typography 
-            variant="subtitle1" 
-            gutterBottom 
+            variant="subtitle2" 
             sx={{ 
               fontWeight: 600,
               color: 'text.primary',
-              mb: 1.5,
-              fontSize: '0.875rem'
+              mb: 1,
+              fontSize: '0.8rem'
             }}
           >
-            Nodes disponibles
+            Nodes
           </Typography>
           <Box
             sx={{
-              p: 2,
+              p: 1,
               border: '1px dashed grey',
               borderRadius: 1,
               bgcolor: 'background.default',
