@@ -1,4 +1,4 @@
-import React, { DragEvent, useState, useEffect } from 'react';
+import React, { DragEvent, useState, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
@@ -19,31 +19,33 @@ import {
   PhotoLibrary as MediaIcon,
   Edit as EditIcon,
   Check as CheckIcon,
+  Upload as UploadIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 
 const SidebarContainer = styled(Paper)(({ theme }) => ({
   position: 'absolute',
   top: theme.spacing(2),
   right: theme.spacing(2),
-  padding: theme.spacing(3),
+  padding: theme.spacing(2),
   display: 'flex',
   flexDirection: 'column',
-  gap: theme.spacing(3),
+  gap: theme.spacing(2),
   backgroundColor: alpha(theme.palette.background.paper, 0.95),
   backdropFilter: 'blur(8px)',
   borderRadius: theme.shape.borderRadius * 2,
   boxShadow: theme.shadows[8],
-  width: '380px',
+  width: '320px',
   zIndex: 1000,
   border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
 }));
 
 const DraggableNode = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(2),
+  padding: theme.spacing(1.5),
   marginBottom: theme.spacing(1),
   display: 'flex',
   alignItems: 'center',
-  gap: theme.spacing(2),
+  gap: theme.spacing(1.5),
   cursor: 'grab',
   backgroundColor: theme.palette.background.paper,
   borderRadius: theme.shape.borderRadius,
@@ -75,6 +77,8 @@ interface SidebarProps {
   isPlaybackMode: boolean;
   onStartPlayback: () => void;
   onStopPlayback: () => void;
+  onExportPov?: () => void;
+  onImportPov?: (file: File) => void;
   children?: React.ReactNode;
   povTitle?: string;
   onPovTitleChange?: (newTitle: string) => void;
@@ -87,12 +91,15 @@ const Sidebar: React.FC<SidebarProps> = ({
   isPlaybackMode,
   onStartPlayback,
   onStopPlayback,
+  onExportPov,
+  onImportPov,
   children,
   povTitle,
   onPovTitleChange,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(povTitle || '');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setEditedTitle(povTitle || '');
@@ -147,6 +154,62 @@ const Sidebar: React.FC<SidebarProps> = ({
             </ActionButton>
           </Tooltip>
         </Stack>
+
+        {/* Section actions POV */}
+        <Box sx={{ 
+          p: 1.5, 
+          bgcolor: 'background.default',
+          borderRadius: 1,
+          border: '1px solid',
+          borderColor: 'divider'
+        }}>
+          <Typography 
+            variant="subtitle2" 
+            sx={{ 
+              color: 'text.secondary', 
+              mb: 1.5,
+              fontWeight: 600,
+              fontSize: '0.875rem'
+            }}
+          >
+            Actions POV
+          </Typography>
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              startIcon={<UploadIcon />}
+              onClick={() => fileInputRef.current?.click()}
+              size="small"
+              fullWidth
+              sx={{ fontSize: '0.75rem' }}
+            >
+              Importer
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={onExportPov}
+              size="small"
+              fullWidth
+              sx={{ fontSize: '0.75rem' }}
+            >
+              Exporter
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pov"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file && onImportPov) {
+                  onImportPov(file);
+                }
+                e.target.value = '';
+              }}
+            />
+          </Stack>
+        </Box>
 
         {/* Section titre POV */}
         {povTitle !== undefined && (
@@ -236,6 +299,37 @@ const Sidebar: React.FC<SidebarProps> = ({
           </Box>
         )}
 
+        {/* Section lecture */}
+        <Box sx={{ 
+          p: 1.5, 
+          bgcolor: 'background.default',
+          borderRadius: 1,
+          border: '1px solid',
+          borderColor: 'divider'
+        }}>
+          <Typography 
+            variant="subtitle2" 
+            sx={{ 
+              color: 'text.secondary', 
+              mb: 1.5,
+              fontWeight: 600,
+              fontSize: '0.875rem'
+            }}
+          >
+            Lecture
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={isPlaybackMode ? <StopIcon /> : <PlayIcon />}
+            onClick={isPlaybackMode ? onStopPlayback : onStartPlayback}
+            fullWidth
+            size="small"
+            sx={{ fontSize: '0.75rem' }}
+          >
+            {isPlaybackMode ? 'Arrêter' : 'Lancer'}
+          </Button>
+        </Box>
+
         {/* Section noeuds disponibles */}
         <Box>
           <Typography 
@@ -244,10 +338,11 @@ const Sidebar: React.FC<SidebarProps> = ({
             sx={{ 
               fontWeight: 600,
               color: 'text.primary',
-              mb: 2,
+              mb: 1.5,
+              fontSize: '0.875rem'
             }}
           >
-            Available Nodes
+            Nodes disponibles
           </Typography>
           <Box
             sx={{
