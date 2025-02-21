@@ -6,6 +6,7 @@ import {
   IconButton,
   Paper,
   Button,
+  Tooltip
 } from '@mui/material';
 import {
   PlayArrow as PlayIcon,
@@ -109,16 +110,29 @@ const PovNode: React.FC<{ data: PovNodeData }> = ({ data }) => {
       />
 
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-        <Typography variant="subtitle1" sx={{ flexGrow: 1, fontWeight: 600 }}>
+        <Typography 
+          variant="subtitle1" 
+          sx={{ 
+            flexGrow: 1, 
+            fontWeight: 600,
+            fontSize: '0.8rem',
+            color: 'text.primary',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}
+          title={data.povFile?.title || 'POV Node'}
+        >
           {data.povFile?.title || 'POV Node'}
         </Typography>
-        <IconButton
-          size="small"
-          onClick={() => fileInputRef.current?.click()}
-          title="Importer un POV"
-        >
-          <UploadIcon />
-        </IconButton>
+        <Tooltip title="Importer un POV">
+          <IconButton
+            size="small"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <UploadIcon sx={{ fontSize: '1rem' }} />
+          </IconButton>
+        </Tooltip>
         <input
           ref={fileInputRef}
           type="file"
