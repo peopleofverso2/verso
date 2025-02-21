@@ -58,14 +58,32 @@ const PovNode: React.FC<{ data: PovNodeData }> = ({ data }) => {
 
     try {
       const povData = await povService.importFromPovFile(file);
+      console.log('Imported POV data:', povData);
       
       // Mettre à jour les données du node
       if (data.onDataChange) {
         data.onDataChange(data.id, {
           ...data,
           povFile: {
-            title: file.name,
-            ...povData
+            title: file.name.replace('.pov', ''),
+            nodes: povData.nodes.map(node => ({
+              ...node,
+              position: node.position || { x: 0, y: 0 }, // S'assurer que la position est définie
+              data: {
+                ...node.data,
+                mediaId: node.data?.mediaId,
+                content: {
+                  ...node.data?.content,
+                  choices: node.data?.content?.choices || [],
+                }
+              }
+            })),
+            edges: povData.edges.map(edge => ({
+              ...edge,
+              sourceHandle: edge.sourceHandle || undefined,
+              data: edge.data || {}
+            })),
+            media: povData.media
           }
         });
       }
