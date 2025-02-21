@@ -12,8 +12,9 @@ import {
   Pause as PauseIcon,
   Upload as UploadIcon,
 } from '@mui/icons-material';
-import { PovExportService } from '../../../services/povExportService';
+import { PovExportService } from '../../../services/PovExportService';
 import { styled } from '@mui/material/styles';
+import MinipovPlayer from './MinipovPlayer';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(2),
@@ -48,7 +49,6 @@ interface PovNodeData {
 
 const PovNode: React.FC<{ data: PovNodeData }> = ({ data }) => {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentPreviewUrl, setCurrentPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const povService = PovExportService.getInstance();
 
@@ -68,12 +68,6 @@ const PovNode: React.FC<{ data: PovNodeData }> = ({ data }) => {
             ...povData
           }
         });
-      }
-
-      // Si le POV contient des médias, utiliser le premier comme preview
-      const firstMedia = Object.values(povData.media)[0];
-      if (firstMedia) {
-        setCurrentPreviewUrl(firstMedia.url);
       }
     } catch (error) {
       console.error('Error importing POV file:', error);
@@ -117,16 +111,14 @@ const PovNode: React.FC<{ data: PovNodeData }> = ({ data }) => {
       </Box>
 
       <PreviewContainer>
-        {currentPreviewUrl ? (
+        {data.povFile ? (
           <>
-            <Box
-              component="img"
-              src={currentPreviewUrl}
-              sx={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain'
-              }}
+            <MinipovPlayer
+              nodes={data.povFile.nodes}
+              edges={data.povFile.edges}
+              media={data.povFile.media}
+              isPlaying={isPlaying}
+              onComplete={() => setIsPlaying(false)}
             />
             <IconButton
               size="small"

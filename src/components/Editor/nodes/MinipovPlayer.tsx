@@ -36,6 +36,7 @@ interface MinipovPlayerProps {
   nodes: any[];
   edges: any[];
   media: Record<string, any>;
+  isPlaying?: boolean;
   onComplete?: () => void;
 }
 
@@ -43,9 +44,9 @@ const MinipovPlayer: React.FC<MinipovPlayerProps> = ({
   nodes,
   edges,
   media,
+  isPlaying = false,
   onComplete
 }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
   const [currentNodeIndex, setCurrentNodeIndex] = useState(0);
   const [progress, setProgress] = useState(0);
 
@@ -56,14 +57,14 @@ const MinipovPlayer: React.FC<MinipovPlayerProps> = ({
     if (currentNodeIndex < nodes.length - 1) {
       setCurrentNodeIndex(prev => prev + 1);
       setProgress((currentNodeIndex + 1) * 100 / nodes.length);
-    } else if (onComplete) {
-      onComplete();
+    } else {
+      setCurrentNodeIndex(0);
+      setProgress(0);
+      if (onComplete) {
+        onComplete();
+      }
     }
   }, [currentNodeIndex, nodes.length, onComplete]);
-
-  const togglePlayback = useCallback(() => {
-    setIsPlaying(!isPlaying);
-  }, [isPlaying]);
 
   // Auto-advance si isPlaying est true
   useEffect(() => {
@@ -71,41 +72,51 @@ const MinipovPlayer: React.FC<MinipovPlayerProps> = ({
       const timer = setTimeout(handleNext, 2000); // 2 secondes par nœud
       return () => clearTimeout(timer);
     }
-  }, [isPlaying, handleNext]);
+  }, [isPlaying, handleNext, currentNodeIndex]);
+
+  // Reset quand isPlaying passe à false
+  useEffect(() => {
+    if (!isPlaying) {
+      setCurrentNodeIndex(0);
+      setProgress(0);
+    }
+  }, [isPlaying]);
+
+  if (!currentMedia) {
+    return (
+      <Box
+        sx={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'text.secondary',
+          fontSize: '0.8rem'
+        }}
+      >
+        Aucun média
+      </Box>
+    );
+  }
 
   return (
     <PlayerContainer>
-      {currentMedia && (
-        <Box
-          component={currentMedia.type === 'video' ? 'video' : 'img'}
-          src={currentMedia.url}
-          sx={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'contain'
-          }}
-          autoPlay={isPlaying}
-          muted
-        />
-      )}
+      <Box
+        component={currentMedia.type === 'video' ? 'video' : 'img'}
+        src={currentMedia.url}
+        sx={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover'
+        }}
+        autoPlay={isPlaying}
+        muted
+        loop={false}
+        onEnded={handleNext}
+      />
 
       <Controls>
-        <IconButton
-          size="small"
-          onClick={togglePlayback}
-          sx={{ color: 'white' }}
-        >
-          {isPlaying ? <PauseIcon /> : <PlayIcon />}
-        </IconButton>
-        
-        <IconButton
-          size="small"
-          onClick={handleNext}
-          sx={{ color: 'white' }}
-        >
-          <NextIcon />
-        </IconButton>
-
         <Box sx={{ flexGrow: 1 }}>
           <LinearProgress
             variant="determinate"
