@@ -251,58 +251,28 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             )}
           </Box>
           <CardContent sx={{ flexGrow: 1 }}>
-            <Box sx={{ mb: 2 }}>
-              <Typography 
-                variant="caption" 
-                color="text.secondary" 
-                sx={{ 
-                  display: 'block',
-                  mb: 0.5 
-                }}
-              >
-                Point POV
-              </Typography>
-              <Typography 
-                variant="h6" 
-                component="h2" 
-                sx={{
-                  fontFamily: 'monospace',
-                  bgcolor: 'background.default',
-                  p: 1,
-                  borderRadius: 1,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  fontSize: '0.9rem'
-                }} 
-                noWrap
-              >
-                {project.scenario?.povTitle || `${project.scenario?.scenarioTitle?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'sans-titre'}_${formatDate(project.updatedAt).split(' ')[0]}.pov`}
-              </Typography>
-            </Box>
             {project.scenario?.scenarioTitle && (
               <Typography 
-                variant="subtitle1"
+                variant="h6"
                 sx={{ 
-                  mb: 1,
-                  fontWeight: 600
+                  fontWeight: 600,
+                  textAlign: 'center',
+                  mt: 1
                 }} 
                 noWrap
               >
                 {project.scenario.scenarioTitle}
               </Typography>
             )}
-            {project.scenario?.description && (
-              <Typography variant="body2" color="text.secondary" sx={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-              }}>
-                {project.scenario.description}
-              </Typography>
-            )}
-            <Typography variant="caption" color="text.secondary" display="block">
+            <Typography 
+              variant="caption" 
+              color="text.secondary" 
+              sx={{ 
+                display: 'block',
+                textAlign: 'center',
+                mt: 1
+              }}
+            >
               Modifié le {formatDate(project.updatedAt)}
             </Typography>
           </CardContent>
