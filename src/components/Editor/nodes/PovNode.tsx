@@ -71,30 +71,20 @@ const PovNode: React.FC<{ data: PovNodeData; id: string }> = ({ data, id }) => {
       const povData = await povService.importFromPovFile(file);
       console.log('POV data imported successfully:', povData);
       
+      // Trouver le premier nœud avec un mediaId
+      const firstMediaNode = povData.nodes.find(node => node.data?.mediaId);
+      const mediaId = firstMediaNode?.data?.mediaId;
+      
       // Mettre à jour les données du node
-      console.log('Updating node data with id:', id);
+      console.log('Updating node data with id:', id, 'mediaId:', mediaId);
       const updatedData = {
         ...data,
+        mediaId,
         label: file.name.replace('.pov', ''),
         povFile: {
           title: file.name.replace('.pov', ''),
-          nodes: povData.nodes.map(node => ({
-            ...node,
-            position: node.position || { x: 0, y: 0 },
-            data: {
-              ...node.data,
-              mediaId: node.data?.mediaId,
-              content: {
-                ...node.data?.content,
-                choices: node.data?.content?.choices || [],
-              }
-            }
-          })),
-          edges: povData.edges.map(edge => ({
-            ...edge,
-            sourceHandle: edge.sourceHandle || undefined,
-            data: edge.data || {}
-          })),
+          nodes: povData.nodes,
+          edges: povData.edges,
           media: povData.media
         }
       };
