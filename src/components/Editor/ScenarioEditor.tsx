@@ -22,6 +22,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import DownloadIcon from '@mui/icons-material/Download';
 import VideoNode2 from './nodes/VideoNode2';
 import MediaNode from './nodes/MediaNode';
+import { PovNode } from './nodes';
 import ChoiceEdge from './edges/ChoiceEdge';
 import { ProjectService } from '../../services/projectService';
 import { PovExportService } from '../../services/PovExportService';
@@ -38,6 +39,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 const nodeTypes: NodeTypes = {
   videoNode2: VideoNode2,
   mediaNode: MediaNode,
+  povNode: PovNode,
 };
 
 const edgeTypes: EdgeTypes = {
@@ -460,43 +462,47 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
     }
   }, [currentProjectId]);
 
-  const handleImportPov = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  const handleImportPov = useCallback(async (file: File) => {
     try {
-      setSnackbar({
-        open: true,
-        message: 'Import en cours...',
-        severity: 'info'
-      });
-
       const povService = PovExportService.getInstance();
-      const { nodes: importedNodes, edges: importedEdges } = await povService.importFromPovFile(file);
+      const povData = await povService.importFromPovFile(file);
       
-      // Optimiser le placement des nœuds
-      const nodesWithLayout = layoutNodes(importedNodes, importedEdges);
-      
-      setNodes(nodesWithLayout);
-      setEdges(importedEdges);
+      // Créer les nodes à partir des données POV
+      const newNodes = povData.nodes.map((node: any) => ({
+        ...node,
+        position: { x: 0, y: 0 }, // Les positions seront ajustées par le layout
+        type: node.type || 'videoNode2',
+      }));
 
-      setSnackbar({
-        open: true,
-        message: 'Scénario importé avec succès',
-        severity: 'success'
-      });
+      // Créer les edges à partir des données POV
+      const newEdges = povData.edges;
+
+      // Mettre à jour le projet avec les nouvelles données
+      const updatedProject = {
+        ...project,
+        scenario: {
+          ...project.scenario,
+          nodes: newNodes,
+          edges: newEdges,
+        },
+      };
+
+      // Appliquer un layout automatique aux nodes
+      const layoutedNodes = layoutNodes(newNodes);
+      setNodes(layoutedNodes);
+      setEdges(newEdges);
+
+      // Sauvegarder le projet
+      await projectService.saveProject(updatedProject);
+
+      // Mettre à jour le titre du POV si présent
+      if (povData.title) {
+        handlePovTitleChange(povData.title);
+      }
     } catch (error) {
-      console.error('Error importing POV:', error);
-      setSnackbar({
-        open: true,
-        message: error instanceof Error ? error.message : 'Erreur lors de l\'import du scénario',
-        severity: 'error'
-      });
+      console.error('Error importing POV file:', error);
     }
-
-    // Reset input
-    event.target.value = '';
-  }, [setNodes, setEdges]);
+  }, [project, setNodes, setEdges]);
 
   const generatePovTitle = useCallback((title: string) => {
     const safeTitle = title
@@ -636,8 +642,10 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
           isPlaybackMode={isPlaybackMode}
           onStartPlayback={startPlayback}
           onStopPlayback={stopPlayback}
-          povTitle={`${povTitle}.pov`}
-          onPovTitleChange={(newTitle) => handlePovTitleChange(newTitle.replace('.pov', ''))}
+          povTitle={project?.scenario?.povTitle}
+          onPovTitleChange={handlePovTitleChange}
+          onImportPov={handleImportPov}
+          onExportPov={handleExportPov}
         >
           <Box sx={{ display: 'flex', gap: 1, p: 1 }}>
             {/* Boutons Export/Import POV */}
@@ -660,7 +668,7 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
                   type="file"
                   accept=".pov"
                   hidden
-                  onChange={handleImportPov}
+                  onChange={(event) => handleImportPov(event.target.files[0])}
                 />
               </IconButton>
             </Tooltip>

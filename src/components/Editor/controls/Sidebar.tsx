@@ -258,6 +258,52 @@ const Sidebar: React.FC<SidebarProps> = ({
             }}
           >
             <DraggableNode
+              onDragStart={(event: DragEvent) => onDragStart(event, 'povNode')}
+              draggable
+              sx={{
+                mb: 1
+              }}
+            >
+              <Box
+                component="span"
+                sx={{
+                  width: 28,
+                  height: 28,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '50%',
+                  backgroundColor: 'primary.main',
+                  color: 'white',
+                  fontSize: '16px',
+                  fontWeight: 'bold'
+                }}
+              >
+                P
+              </Box>
+              <Box>
+                <Typography 
+                  variant="subtitle2" 
+                  sx={{ 
+                    fontWeight: 600,
+                    color: 'text.primary',
+                  }}
+                >
+                  POV Node
+                </Typography>
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    color: 'text.secondary',
+                    display: 'block',
+                  }}
+                >
+                  Import POV File
+                </Typography>
+              </Box>
+            </DraggableNode>
+
+            <DraggableNode
               onDragStart={(event: DragEvent) => onDragStart(event, 'videoNode2')}
               draggable
             >
