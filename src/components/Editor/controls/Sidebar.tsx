@@ -307,40 +307,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           </Box>
         )}
 
-        {/* Section lecture */}
-        <Box sx={{ 
-          p: 1, 
-          bgcolor: 'background.default',
-          borderRadius: 1,
-          border: '1px solid',
-          borderColor: 'divider'
-        }}>
-          <Typography 
-            variant="subtitle2" 
-            sx={{ 
-              color: 'text.secondary', 
-              mb: 1,
-              fontWeight: 600,
-              fontSize: '0.8rem'
-            }}
-          >
-            Lecture
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={isPlaybackMode ? <StopIcon sx={{ fontSize: '1rem' }} /> : <PlayIcon sx={{ fontSize: '1rem' }} />}
-            onClick={isPlaybackMode ? onStopPlayback : onStartPlayback}
-            fullWidth
-            size="small"
-            sx={{ 
-              fontSize: '0.7rem',
-              py: 0.5
-            }}
-          >
-            {isPlaybackMode ? 'Arrêter' : 'Lancer'}
-          </Button>
-        </Box>
-
         {/* Section noeuds disponibles */}
         <Box>
           <Typography 
