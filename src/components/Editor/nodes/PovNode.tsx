@@ -73,22 +73,29 @@ const PovNode: React.FC<{ data: PovNodeData; id: string }> = ({ data, id }) => {
       
       // Trouver le premier nœud avec un mediaId
       const firstMediaNode = povData.nodes.find(node => node.data?.mediaId);
-      const mediaId = firstMediaNode?.data?.mediaId;
       
       // Mettre à jour les données du node
-      console.log('Updating node data with id:', id, 'mediaId:', mediaId);
+      console.log('First media node:', firstMediaNode);
+      console.log('Media data:', povData.media);
+      
       const updatedData = {
         ...data,
-        mediaId,
+        mediaId: firstMediaNode?.data?.mediaId,
         label: file.name.replace('.pov', ''),
         povFile: {
           title: file.name.replace('.pov', ''),
-          nodes: povData.nodes,
+          nodes: povData.nodes.map(node => ({
+            ...node,
+            data: {
+              ...node.data,
+              mediaId: node.data?.mediaId
+            }
+          })),
           edges: povData.edges,
           media: povData.media
         }
       };
-      console.log('Updated data:', updatedData);
+      console.log('Updated node data:', updatedData);
       data.onDataChange(id, updatedData);
       console.log('Node data updated successfully');
     } catch (error) {

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   Box,
   IconButton,
@@ -50,39 +50,55 @@ const MinipovPlayer: React.FC<MinipovPlayerProps> = ({
   const [currentNodeIndex, setCurrentNodeIndex] = useState(0);
   const [progress, setProgress] = useState(0);
 
-  const currentNode = nodes[currentNodeIndex];
-  const currentMedia = currentNode?.data?.mediaId ? media[currentNode.data.mediaId] : null;
+  const currentNode = useMemo(() => nodes[currentNodeIndex], [nodes, currentNodeIndex]);
+  
+  useEffect(() => {
+    console.log('MinipovPlayer - Current node:', currentNode);
+    console.log('MinipovPlayer - Media:', media);
+  }, [currentNode, media]);
+
+  const currentMedia = useMemo(() => {
+    if (!currentNode?.data?.mediaId) {
+      console.log('MinipovPlayer - No mediaId in current node');
+      return null;
+    }
+    const mediaItem = media[currentNode.data.mediaId];
+    console.log('MinipovPlayer - Media item found:', mediaItem);
+    return mediaItem;
+  }, [currentNode, media]);
 
   const handleNext = useCallback(() => {
     if (currentNodeIndex < nodes.length - 1) {
       setCurrentNodeIndex(prev => prev + 1);
-      setProgress((currentNodeIndex + 1) * 100 / nodes.length);
     } else {
-      setCurrentNodeIndex(0);
-      setProgress(0);
-      if (onComplete) {
-        onComplete();
-      }
+      onComplete?.();
     }
   }, [currentNodeIndex, nodes.length, onComplete]);
 
-  // Auto-advance si isPlaying est true
   useEffect(() => {
-    if (isPlaying) {
-      const timer = setTimeout(handleNext, 2000); // 2 secondes par nœud
-      return () => clearTimeout(timer);
+    let progressInterval: NodeJS.Timeout | null = null;
+    
+    if (isPlaying && currentMedia?.type === 'video') {
+      progressInterval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 100) {
+            handleNext();
+            return 0;
+          }
+          return prev + 1;
+        });
+      }, 100);
     }
-  }, [isPlaying, handleNext, currentNodeIndex]);
 
-  // Reset quand isPlaying passe à false
-  useEffect(() => {
-    if (!isPlaying) {
-      setCurrentNodeIndex(0);
-      setProgress(0);
-    }
-  }, [isPlaying]);
+    return () => {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
+    };
+  }, [isPlaying, currentMedia, handleNext]);
 
   if (!currentMedia) {
+    console.log('MinipovPlayer - No media to display');
     return (
       <Box
         sx={{
@@ -102,8 +118,10 @@ const MinipovPlayer: React.FC<MinipovPlayerProps> = ({
 
   // Créer une URL valide pour le média
   const mediaUrl = currentMedia.url;
+  console.log('MinipovPlayer - Media URL:', mediaUrl);
+  
   if (!mediaUrl) {
-    console.error('No URL for media:', currentMedia);
+    console.error('MinipovPlayer - No URL for media:', currentMedia);
     return null;
   }
 
