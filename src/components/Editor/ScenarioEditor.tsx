@@ -368,7 +368,7 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
         type,
         position,
         data: { 
-          label: type === 'mediaNode' ? 'Media Node' : `${type} node`,
+          label: type === 'mediaNode' ? 'Media Node' : type === 'povNode' ? 'POV Node' : `${type} node`,
           onDataChange: handleNodeDataChange,
           onVideoEnd,
           onChoiceSelect: handleChoiceSelect,
@@ -384,13 +384,13 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
           isPlaybackMode: false,
           isCurrentNode: false,
           isPlaying: false,
-          getConnectedNodeId: (buttonId: string) => getConnectedNodeId(nodeId, buttonId),
+          getConnectedNodeId: (buttonId: string) => getConnectedNodeId(getId(), buttonId),
         },
       };
 
       setNodes((nds) => nds.concat(newNode));
     },
-    [screenToFlowPosition, handleNodeDataChange, getConnectedNodeId]
+    [screenToFlowPosition, handleNodeDataChange, getConnectedNodeId, onVideoEnd, handleChoiceSelect]
   );
 
   const handlePlayScenario = useCallback(async () => {

@@ -328,51 +328,47 @@ const Sidebar: React.FC<SidebarProps> = ({
               bgcolor: 'background.default',
             }}
           >
-            <DraggableNode
-              onDragStart={(event: DragEvent) => onDragStart(event, 'povNode')}
-              draggable
+            <Box
               sx={{
-                mb: 1
+                p: 1,
+                bgcolor: 'background.default',
+                borderRadius: 1,
+                border: '1px solid',
+                borderColor: 'divider',
+                cursor: 'grab',
+              }}
+              draggable
+              onDragStart={(event) => {
+                event.dataTransfer.setData('application/reactflow', 'povNode');
+                event.dataTransfer.effectAllowed = 'move';
               }}
             >
-              <Box
-                component="span"
-                sx={{
-                  width: 28,
-                  height: 28,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '50%',
-                  backgroundColor: 'primary.main',
-                  color: 'white',
-                  fontSize: '16px',
-                  fontWeight: 'bold'
-                }}
-              >
-                P
-              </Box>
-              <Box>
-                <Typography 
-                  variant="subtitle2" 
-                  sx={{ 
-                    fontWeight: 600,
-                    color: 'text.primary',
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 24,
+                    height: 24,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: 'primary.main',
+                    color: 'primary.contrastText',
+                    borderRadius: 1,
+                    fontSize: '0.7rem',
                   }}
                 >
-                  POV Node
-                </Typography>
-                <Typography 
-                  variant="caption" 
-                  sx={{ 
-                    color: 'text.secondary',
-                    display: 'block',
-                  }}
-                >
-                  Import POV File
-                </Typography>
+                  P
+                </Box>
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>
+                    POV Node
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                    Importer un scénario POV
+                  </Typography>
+                </Box>
               </Box>
-            </DraggableNode>
+            </Box>
 
             <DraggableNode
               onDragStart={(event: DragEvent) => onDragStart(event, 'videoNode2')}
