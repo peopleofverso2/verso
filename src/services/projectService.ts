@@ -102,6 +102,7 @@ export class ProjectService {
       scenario: {
         scenarioTitle: title,
         description,
+        povTitle: `${title.toLowerCase().replace(/[^a-z0-9]/g, '-')}_${now.split('T')[0]}.pov`,
         steps: []
       },
       nodes: [],
@@ -297,24 +298,32 @@ export class ProjectService {
   }
 
   async getProjectList(): Promise<ProjectMetadata[]> {
+    await this.initialize();
+    
     try {
+      console.log('Getting project list');
       const db = await this.getDB();
-      const transaction = db.transaction([STORE_NAME], 'readonly');
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.getAll();
-
       return new Promise((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.getAll();
+
         request.onerror = () => reject(request.error);
+
         request.onsuccess = () => {
           const projects = request.result;
-          const projectMetadataList = projects.map(project => ({
+          const metadata: ProjectMetadata[] = projects.map(project => ({
             projectId: project.projectId,
-            scenarioTitle: project.scenario?.scenarioTitle || 'Sans titre',
-            description: project.scenario?.description || '',
+            scenario: {
+              scenarioTitle: project.scenario.scenarioTitle,
+              povTitle: project.scenario.povTitle,
+              description: project.scenario.description
+            },
             createdAt: project.createdAt,
             updatedAt: project.updatedAt
           }));
-          resolve(projectMetadataList);
+          console.log('Project list retrieved:', metadata);
+          resolve(metadata);
         };
       });
     } catch (error) {

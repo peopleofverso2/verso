@@ -26,6 +26,7 @@ export interface Step {
 export interface Scenario {
   scenarioTitle: string;
   description: string;
+  povTitle?: string;
   steps: Step[];
 }
 
@@ -56,8 +57,11 @@ export interface Project {
 
 export interface ProjectMetadata {
   projectId: string;
-  scenarioTitle: string;
-  description: string;
+  scenario: {
+    scenarioTitle: string;
+    povTitle?: string;
+    description: string;
+  };
   createdAt: string;
   updatedAt: string;
 }

@@ -200,8 +200,11 @@ export const ProjectLibrary: React.FC = () => {
       console.log('Projects loaded:', projects);
       setProjects(projects.map(project => ({
         projectId: project.projectId,
-        scenarioTitle: project.scenario?.scenarioTitle || 'Sans titre',
-        description: project.scenario?.description || '',
+        scenario: {
+          scenarioTitle: project.scenario?.scenarioTitle || 'Sans titre',
+          povTitle: project.scenario?.povTitle,
+          description: project.scenario?.description || ''
+        },
         createdAt: project.createdAt,
         updatedAt: project.updatedAt,
         minimap: project.minimap

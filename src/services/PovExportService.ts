@@ -144,16 +144,17 @@ export class PovExportService {
   }
 
   public async exportToPovFile(project: any): Promise<Blob> {
-    const title = project.scenario?.scenarioTitle || 'sans-titre';
+    const title = project.scenario?.povTitle || project.scenario?.scenarioTitle || 'sans-titre';
     const safeTitle = title
       .toLowerCase()
-      .replace(/[^a-z0-9]/g, '-') // Remplacer les caractères non alphanumériques par des tirets
-      .replace(/-+/g, '-') // Remplacer les tirets multiples par un seul
-      .replace(/^-|-$/g, ''); // Supprimer les tirets au début et à la fin
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
 
     const povData = await this.exportScenario(title, project.nodes, project.edges);
     const date = new Date().toISOString().split('T')[0];
     const filename = `${safeTitle}_${date}.pov`;
+    console.log('Exporting POV file:', filename);
     return new Blob([JSON.stringify(povData)], { type: 'application/json' });
   }
 

@@ -79,6 +79,7 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
   const [povScenario, setPovScenario] = useState<any>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
   const [exporting, setExporting] = useState(false);
+  const [povTitle, setPovTitle] = useState<string>('');
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
   const projectService = ProjectService.getInstance();
@@ -497,6 +498,42 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
     event.target.value = '';
   }, [setNodes, setEdges]);
 
+  const generatePovTitle = useCallback((title: string) => {
+    const safeTitle = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    const date = new Date().toISOString().split('T')[0];
+    return `${safeTitle}_${date}`;
+  }, []);
+
+  useEffect(() => {
+    if (project?.scenario?.scenarioTitle) {
+      setPovTitle(generatePovTitle(project.scenario.scenarioTitle));
+    }
+  }, [project?.scenario?.scenarioTitle, generatePovTitle]);
+
+  const handlePovTitleChange = useCallback((newTitle: string) => {
+    setPovTitle(newTitle);
+    if (project) {
+      const updatedProject = {
+        ...project,
+        scenario: {
+          ...project.scenario,
+          povTitle: newTitle,
+          scenarioTitle: newTitle.split('_')[0].replace(/-/g, ' ')
+        }
+      };
+      setProject(updatedProject);
+      
+      // Sauvegarder immédiatement le changement
+      projectService.saveProject(updatedProject).catch(error => {
+        console.error('Error saving POV title:', error);
+      });
+    }
+  }, [project, projectService]);
+
   // Charger le projet au démarrage
   useEffect(() => {
     let isSubscribed = true;
@@ -599,6 +636,8 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
           isPlaybackMode={isPlaybackMode}
           onStartPlayback={startPlayback}
           onStopPlayback={stopPlayback}
+          povTitle={`${povTitle}.pov`}
+          onPovTitleChange={(newTitle) => handlePovTitleChange(newTitle.replace('.pov', ''))}
         >
           <Box sx={{ display: 'flex', gap: 1, p: 1 }}>
             {/* Boutons Export/Import POV */}
