@@ -145,6 +145,11 @@ export const ProjectLibrary: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showPovPlayer, setShowPovPlayer] = useState(false);
   const [povFile, setPovFile] = useState<any>(null);
+  const [selectedProject, setSelectedProject] = useState<ProjectMetadata | null>(null);
+  const [metadataDialogOpen, setMetadataDialogOpen] = useState(false);
+  const [povPlayerOpen, setPovPlayerOpen] = useState(false);
+  const [povScenario, setPovScenario] = useState<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const projectService = useRef(ProjectService.getInstance());
   const povExportService = useRef(PovExportService.getInstance());
@@ -349,32 +354,64 @@ export const ProjectLibrary: React.FC = () => {
     }
   };
 
-  const handleImportPov = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportPov = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     try {
+      setLoading(true);
+      setError(null);
+      
+      // Importer le fichier POV
       const povService = PovExportService.getInstance();
-      const { nodes, edges } = await povService.importFromPovFile(file);
+      const { nodes, edges, scenario } = await povService.importFromPovFile(file);
       
-      // Créer un nouveau projet avec le scénario importé
-      const projectService = ProjectService.getInstance();
-      const projectId = await projectService.createProject(file.name.replace('.pov', ''));
-      const project = await projectService.loadProject(projectId);
+      // Créer un nouveau projet avec les données importées
+      const projectId = await projectService.current.createProject(
+        scenario.scenarioTitle || 'Projet importé',
+        scenario.description || ''
+      );
       
-      if (project) {
-        project.nodes = nodes;
-        project.edges = edges;
-        await projectService.saveProject(project);
-      }
+      // Mettre à jour le projet avec les nœuds et les arêtes
+      const project = await projectService.current.loadProject(projectId);
+      const updatedProject = {
+        ...project,
+        nodes,
+        edges,
+        scenario: {
+          ...project.scenario,
+          ...scenario
+        }
+      };
+      
+      await projectService.current.saveProject(updatedProject);
+      
+      // Recharger la liste des projets
+      await loadProjects();
+      
+      setSnackbar({
+        open: true,
+        message: 'Projet importé avec succès',
+        severity: 'success'
+      });
+      
+      // Rediriger vers l'éditeur
+      navigate(`/editor/${projectId}`);
     } catch (error) {
       console.error('Error importing POV:', error);
-      setError('Erreur lors de l\'import du fichier POV');
+      setError(error instanceof Error ? error.message : 'Erreur lors de l\'import du fichier POV');
+      setSnackbar({
+        open: true,
+        message: 'Erreur lors de l\'import du fichier POV',
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+      if (event.target) {
+        event.target.value = '';
+      }
     }
-
-    // Reset input
-    event.target.value = '';
-  }, []);
+  };
 
   const handlePlayScenario = async (project: ProjectMetadata) => {
     try {
@@ -439,14 +476,29 @@ export const ProjectLibrary: React.FC = () => {
         <Typography variant="h4" component="h1">
           Bibliothèque de Projets
         </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={() => setCreateDialogOpen(true)}
-          startIcon={<AddIcon />}
-        >
-          Nouveau Projet
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setCreateDialogOpen(true)}
+          >
+            Nouveau projet
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<UploadFileIcon />}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Importer un POV
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pov"
+            style={{ display: 'none' }}
+            onChange={handleImportPov}
+          />
+        </Box>
       </Box>
 
       {error && (
