@@ -29,7 +29,9 @@ import {
   OpenInNew as OpenInNewIcon,
   PlayArrow as PlayArrowIcon,
   Image as ImageIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Logout as LogoutIcon,
+  Login as LoginIcon
 } from '@mui/icons-material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { ProjectService } from '../../services/projectService';
@@ -38,7 +40,6 @@ import ProjectList from '../ProjectList/ProjectList';
 import { PovExportService } from '../../services/povExportService';
 import PovPlayer from '../Player/PovPlayer';
 import { MediaLibraryService } from '../../services/mediaLibraryService';
-import { LoginButton } from '../Auth/LoginButton';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ProjectCard from '../ProjectList/ProjectCard';
@@ -135,7 +136,7 @@ const ProjectMetadataDialog: React.FC<ProjectMetadataDialogProps> = ({
 
 export const ProjectLibrary: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, signInWithGoogle, signOut } = useAuth();
   const [projects, setProjects] = useState<ProjectMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -145,6 +146,11 @@ export const ProjectLibrary: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showPovPlayer, setShowPovPlayer] = useState(false);
   const [povFile, setPovFile] = useState<any>(null);
+  const [selectedProject, setSelectedProject] = useState<ProjectMetadata | null>(null);
+  const [metadataDialogOpen, setMetadataDialogOpen] = useState(false);
+  const [povPlayerOpen, setPovPlayerOpen] = useState(false);
+  const [povScenario, setPovScenario] = useState<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const projectService = useRef(ProjectService.getInstance());
   const povExportService = useRef(PovExportService.getInstance());
@@ -152,7 +158,17 @@ export const ProjectLibrary: React.FC = () => {
   const [mediaLibrary, setMediaLibrary] = useState<MediaLibraryService | null>(null);
 
   useEffect(() => {
-    MediaLibraryService.getInstance().then(setMediaLibrary);
+    const initMediaLibrary = async () => {
+      try {
+        const service = MediaLibraryService.getInstance();
+        await service.initialize();
+        setMediaLibrary(service);
+      } catch (error) {
+        console.error('Error initializing media library:', error);
+      }
+    };
+    
+    initMediaLibrary();
   }, []);
 
   const getMediaUrl = useCallback(async (mediaId: string) => {
@@ -190,8 +206,11 @@ export const ProjectLibrary: React.FC = () => {
       console.log('Projects loaded:', projects);
       setProjects(projects.map(project => ({
         projectId: project.projectId,
-        scenarioTitle: project.scenario?.scenarioTitle || 'Sans titre',
-        description: project.scenario?.description || '',
+        scenario: {
+          scenarioTitle: project.scenario?.scenarioTitle || 'Sans titre',
+          povTitle: project.scenario?.povTitle,
+          description: project.scenario?.description || ''
+        },
         createdAt: project.createdAt,
         updatedAt: project.updatedAt,
         minimap: project.minimap
@@ -336,32 +355,64 @@ export const ProjectLibrary: React.FC = () => {
     }
   };
 
-  const handleImportPov = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportPov = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     try {
+      setLoading(true);
+      setError(null);
+      
+      // Importer le fichier POV
       const povService = PovExportService.getInstance();
-      const { nodes, edges } = await povService.importFromPovFile(file);
+      const { nodes, edges, scenario } = await povService.importFromPovFile(file);
       
-      // Créer un nouveau projet avec le scénario importé
-      const projectService = ProjectService.getInstance();
-      const projectId = await projectService.createProject(file.name.replace('.pov', ''));
-      const project = await projectService.loadProject(projectId);
+      // Créer un nouveau projet avec les données importées
+      const projectId = await projectService.current.createProject(
+        scenario.scenarioTitle || 'Projet importé',
+        scenario.description || ''
+      );
       
-      if (project) {
-        project.nodes = nodes;
-        project.edges = edges;
-        await projectService.saveProject(project);
-      }
+      // Mettre à jour le projet avec les nœuds et les arêtes
+      const project = await projectService.current.loadProject(projectId);
+      const updatedProject = {
+        ...project,
+        nodes,
+        edges,
+        scenario: {
+          ...project.scenario,
+          ...scenario
+        }
+      };
+      
+      await projectService.current.saveProject(updatedProject);
+      
+      // Recharger la liste des projets
+      await loadProjects();
+      
+      setSnackbar({
+        open: true,
+        message: 'Projet importé avec succès',
+        severity: 'success'
+      });
+      
+      // Rediriger vers l'éditeur
+      navigate(`/editor/${projectId}`);
     } catch (error) {
       console.error('Error importing POV:', error);
-      setError('Erreur lors de l\'import du fichier POV');
+      setError(error instanceof Error ? error.message : 'Erreur lors de l\'import du fichier POV');
+      setSnackbar({
+        open: true,
+        message: 'Erreur lors de l\'import du fichier POV',
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+      if (event.target) {
+        event.target.value = '';
+      }
     }
-
-    // Reset input
-    event.target.value = '';
-  }, []);
+  };
 
   const handlePlayScenario = async (project: ProjectMetadata) => {
     try {
@@ -404,36 +455,67 @@ export const ProjectLibrary: React.FC = () => {
         />
       )}
 
-      <AppBar position="static" sx={{ mb: 3 }}>
+      <AppBar position="static" color="default">
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Verso Project Library
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', gap: 1 }}>
             <IconButton
               color="inherit"
               onClick={() => navigate('/settings')}
-              title="Settings"
+              sx={{ mr: 1 }}
             >
               <SettingsIcon />
             </IconButton>
-            <LoginButton />
+            {user ? (
+              <Button
+                variant="outlined"
+                onClick={signOut}
+                startIcon={<LogoutIcon />}
+              >
+                Se déconnecter
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                onClick={signInWithGoogle}
+                startIcon={<LoginIcon />}
+              >
+                Se connecter
+              </Button>
+            )}
           </Box>
         </Toolbar>
       </AppBar>
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Typography variant="h4" component="h1">
           Bibliothèque de Projets
         </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={() => setCreateDialogOpen(true)}
-          startIcon={<AddIcon />}
-        >
-          Nouveau Projet
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setCreateDialogOpen(true)}
+          >
+            Nouveau projet
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<UploadFileIcon />}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Importer un POV
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pov"
+            style={{ display: 'none' }}
+            onChange={handleImportPov}
+          />
+        </Box>
       </Box>
 
       {error && (
