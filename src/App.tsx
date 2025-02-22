@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Container, CssBaseline, ThemeProvider, CircularProgress } from '@mui/material';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Container, CssBaseline, ThemeProvider, CircularProgress, Box } from '@mui/material';
 import { theme } from './theme';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProjectLibrary } from './components/ProjectLibrary/ProjectLibrary';
 import { ScenarioEditor } from './components/Editor/ScenarioEditor';
 import { ConfigPage } from './components/Settings/ConfigPage';
-import { MediaLibraryService } from './services/MediaLibraryService'; // Import MediaLibraryService
+import { MediaLibraryService } from './services/MediaLibraryService';
+import ProtectedRoute from './components/Auth/ProtectedRoute';
+import LoginPage from './components/Auth/LoginPage';
 
 const App: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState(false);
@@ -34,38 +36,47 @@ const App: React.FC = () => {
 
   if (error) {
     return (
-      <div style={{ padding: '20px', textAlign: 'center' }}>
+      <Box sx={{ p: 3, textAlign: 'center' }}>
         <h2>Error</h2>
         <p>{error}</p>
         <button onClick={() => window.location.reload()}>Retry</button>
-      </div>
+      </Box>
     );
   }
 
   if (!isInitialized) {
     return (
-      <div style={{ padding: '20px', textAlign: 'center' }}>
+      <Box sx={{ p: 3, textAlign: 'center' }}>
         <CircularProgress />
         <p>Initializing application...</p>
-      </div>
+      </Box>
     );
   }
 
   return (
-    <AuthProvider>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <AuthProvider>
         <Router>
           <Container maxWidth={false} disableGutters sx={{ height: '100vh', overflow: 'hidden' }}>
             <Routes>
+              <Route path="/login" element={<LoginPage />} />
               <Route path="/" element={<ProjectLibrary />} />
-              <Route path="/editor/:projectId" element={<ScenarioEditor />} />
+              <Route
+                path="/editor/:projectId"
+                element={
+                  <ProtectedRoute>
+                    <ScenarioEditor />
+                  </ProtectedRoute>
+                }
+              />
               <Route path="/settings" element={<ConfigPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Container>
         </Router>
-      </ThemeProvider>
-    </AuthProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 

@@ -29,7 +29,9 @@ import {
   OpenInNew as OpenInNewIcon,
   PlayArrow as PlayArrowIcon,
   Image as ImageIcon,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Logout as LogoutIcon,
+  Login as LoginIcon
 } from '@mui/icons-material';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { ProjectService } from '../../services/projectService';
@@ -38,7 +40,6 @@ import ProjectList from '../ProjectList/ProjectList';
 import { PovExportService } from '../../services/povExportService';
 import PovPlayer from '../Player/PovPlayer';
 import { MediaLibraryService } from '../../services/mediaLibraryService';
-import { LoginButton } from '../Auth/LoginButton';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import ProjectCard from '../ProjectList/ProjectCard';
@@ -135,7 +136,7 @@ const ProjectMetadataDialog: React.FC<ProjectMetadataDialogProps> = ({
 
 export const ProjectLibrary: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, signInWithGoogle, signOut } = useAuth();
   const [projects, setProjects] = useState<ProjectMetadata[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -454,25 +455,41 @@ export const ProjectLibrary: React.FC = () => {
         />
       )}
 
-      <AppBar position="static" sx={{ mb: 3 }}>
+      <AppBar position="static" color="default">
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Verso Project Library
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', gap: 1 }}>
             <IconButton
               color="inherit"
               onClick={() => navigate('/settings')}
-              title="Settings"
+              sx={{ mr: 1 }}
             >
               <SettingsIcon />
             </IconButton>
-            <LoginButton />
+            {user ? (
+              <Button
+                variant="outlined"
+                onClick={signOut}
+                startIcon={<LogoutIcon />}
+              >
+                Se déconnecter
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                onClick={signInWithGoogle}
+                startIcon={<LoginIcon />}
+              >
+                Se connecter
+              </Button>
+            )}
           </Box>
         </Toolbar>
       </AppBar>
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Typography variant="h4" component="h1">
           Bibliothèque de Projets
         </Typography>
