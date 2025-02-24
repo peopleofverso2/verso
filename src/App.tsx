@@ -8,6 +8,7 @@ import { ScenarioEditor } from './components/Editor/ScenarioEditor';
 import { ConfigPage } from './components/Settings/ConfigPage';
 import { MediaLibraryService } from './services/MediaLibraryService';
 import { PrivateRoute } from './components/Auth/PrivateRoute';
+import { RouteTransition } from './components/common/RouteTransition';
 
 const App: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState(false);
@@ -58,25 +59,27 @@ const App: React.FC = () => {
         <CssBaseline />
         <Router>
           <Container maxWidth={false} disableGutters sx={{ height: '100vh', overflow: 'hidden' }}>
-            <Routes>
-              <Route path="/" element={<ProjectLibrary />} />
-              <Route 
-                path="/editor/:projectId" 
-                element={
-                  <PrivateRoute>
-                    <ScenarioEditor />
-                  </PrivateRoute>
-                } 
-              />
-              <Route 
-                path="/settings" 
-                element={
-                  <PrivateRoute>
-                    <ConfigPage />
-                  </PrivateRoute>
-                } 
-              />
-            </Routes>
+            <RouteTransition>
+              <Routes>
+                <Route path="/" element={<ProjectLibrary />} />
+                <Route 
+                  path="/editor/:projectId" 
+                  element={
+                    <PrivateRoute>
+                      <ScenarioEditor />
+                    </PrivateRoute>
+                  } 
+                />
+                <Route 
+                  path="/settings" 
+                  element={
+                    <PrivateRoute>
+                      <ConfigPage />
+                    </PrivateRoute>
+                  } 
+                />
+              </Routes>
+            </RouteTransition>
           </Container>
         </Router>
       </ThemeProvider>
