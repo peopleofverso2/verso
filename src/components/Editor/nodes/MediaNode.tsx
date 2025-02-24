@@ -1,40 +1,31 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  IconButton,
-  Button,
   Box,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
   Paper,
   Slider,
   Stack,
   TextField,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  Tooltip,
   Typography,
-  DragIndicatorIcon,
-  PauseIcon,
-  PlayArrowIcon,
-  ErrorIcon,
+  Tooltip,
 } from '@mui/material';
-import {
-  Edit as EditIcon,
-  VolumeUp as VolumeUpIcon,
-  VolumeOff as VolumeOffIcon,
-  Movie as MovieIcon,
-  Image as ImageIcon,
-  Timer as TimerIcon,
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  SmartButton as SmartButtonIcon,
-  MusicNote as MusicNoteIcon,
-} from '@mui/icons-material';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
+import ImageIcon from '@mui/icons-material/Image';
+import MusicNoteIcon from '@mui/icons-material/MusicNote';
+import VolumeOffIcon from '@mui/icons-material/VolumeOff';
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PauseIcon from '@mui/icons-material/Pause';
+import ErrorIcon from '@mui/icons-material/Error';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+
 import MediaLibrary from '../../../components/MediaLibrary/MediaLibrary';
 import { MediaFile } from '../../../types';
 import { MediaLibraryService } from '../../../services/MediaLibraryService';
