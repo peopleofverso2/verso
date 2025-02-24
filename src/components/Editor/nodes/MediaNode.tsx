@@ -17,6 +17,11 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   Tooltip,
+  Typography,
+  DragIndicatorIcon,
+  PauseIcon,
+  PlayArrowIcon,
+  ErrorIcon,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -107,6 +112,78 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
 
   // New state for button management
   const [newButtonText, setNewButtonText] = useState('');
+
+  // Styles pour le MediaNode
+  const nodeStyles = {
+    root: {
+      border: (theme: any) => `2px solid ${selected ? theme.palette.primary.main : theme.palette.grey[300]}`,
+      borderRadius: 1,
+      padding: 1,
+      backgroundColor: 'background.paper',
+      position: 'relative',
+      minWidth: 250,
+      maxWidth: 400,
+      '&:hover': {
+        '& .media-controls': {
+          opacity: 1,
+        },
+      },
+    },
+    mediaContainer: {
+      position: 'relative',
+      width: '100%',
+      minHeight: 150,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+      borderRadius: 1,
+      backgroundColor: 'grey.900',
+    },
+    controls: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      padding: 1,
+      background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 70%, transparent 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      opacity: 0,
+      transition: 'opacity 0.3s ease',
+      '&:hover': {
+        opacity: 1,
+      },
+    },
+    buttonContainer: {
+      marginTop: 2,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 1,
+    },
+    choiceButton: {
+      width: '100%',
+      justifyContent: 'flex-start',
+      textAlign: 'left',
+      position: 'relative',
+      '&:hover .button-actions': {
+        opacity: 1,
+      },
+    },
+    buttonActions: {
+      position: 'absolute',
+      right: 8,
+      opacity: 0,
+      transition: 'opacity 0.2s ease',
+      display: 'flex',
+      gap: 0.5,
+    },
+    addButtonForm: {
+      display: 'flex',
+      gap: 1,
+      marginTop: 1,
+    },
+  };
 
   // Load media on mount and when mediaId changes
   useEffect(() => {
@@ -248,7 +325,7 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
   }, [audioState.fadeOutDuration, audioState.isPlaying, fadeVolume]);
 
   // Gestion du volume
-  const handleVolumeChange = useCallback((event: Event, newValue: number | number[]) => {
+  const handleVolumeChange = useCallback((event: any, newValue: number | number[]) => {
     const newVolume = newValue as number;
     setAudioState(prev => ({ ...prev, volume: newVolume }));
     
@@ -538,280 +615,228 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
     data.onDataChange(id, newData);
   }, [id, data, data.onDataChange]);
 
-  return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Handle type="target" position={Position.Top} />
-      <Paper
-        elevation={1}
-        sx={{
-          position: 'relative',
-          width: '100%',
-          minWidth: 200,
-          minHeight: 150,
-          display: 'flex',
-          flexDirection: 'column',
-          borderRadius: 1,
-          border: '1px solid',
-          borderColor: selected ? 'primary.main' : 'divider',
-          overflow: 'hidden',
-        }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        {/* Media Display */}
-        <Box 
-          sx={{ 
-            position: 'relative',
-            width: '100%',
-            paddingBottom: '56.25%', // Ratio 16:9
-            flex: 1,
-          }}
-        >
-          <Box
+  // Rendu des boutons de choix
+  const renderChoiceButtons = () => {
+    if (!data.content?.choices?.length && !data.isPlaybackMode) {
+      return (
+        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 1 }}>
+          Aucun bouton ajouté. Utilisez le formulaire ci-dessous pour en ajouter.
+        </Typography>
+      );
+    }
+
+    return data.content?.choices?.map((choice, index) => (
+      <Box key={choice.id} sx={{ position: 'relative' }}>
+        {data.isPlaybackMode ? (
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => data.onChoiceSelect?.(id, choice)}
+            sx={nodeStyles.choiceButton}
+            disabled={!showButtons}
+          >
+            {choice.text}
+          </Button>
+        ) : (
+          <Paper
+            elevation={1}
             sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
+              p: 1,
               display: 'flex',
-              justifyContent: 'center',
               alignItems: 'center',
-              overflow: 'hidden',
+              gap: 1,
+              backgroundColor: 'background.default',
             }}
           >
-            {data.mediaType === 'video' ? (
-              <video
-                ref={videoRef}
-                src={mediaUrl}
-                style={{ 
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                }}
-                controls={!data.isPlaybackMode}
-                onEnded={() => {
-                  if (data.onMediaEnd) {
-                    data.onMediaEnd(id);
-                  }
-                  if (data.content?.timer?.loop) {
-                    videoRef.current?.play();
-                  }
-                }}
-              />
-            ) : data.mediaType === 'image' ? (
-              <img
-                src={mediaUrl}
-                alt="Media content"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                }}
-              />
-            ) : (
-              <Box
-                sx={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  bgcolor: 'background.default',
-                  color: 'text.secondary',
-                }}
-              >
-                {error ? (
-                  <Box sx={{ p: 2, textAlign: 'center' }}>
-                    <MovieIcon sx={{ fontSize: 40, mb: 1 }} />
-                    <div>{error}</div>
+            <DragIndicatorIcon color="action" sx={{ cursor: 'move' }} />
+            <TextField
+              size="small"
+              value={choice.text}
+              onChange={(e) => handleEditButtonText(choice.id, e.target.value)}
+              fullWidth
+              variant="standard"
+              InputProps={{
+                endAdornment: (
+                  <Box className="button-actions" sx={nodeStyles.buttonActions}>
+                    <Tooltip title="Supprimer">
+                      <IconButton
+                        size="small"
+                        onClick={() => handleRemoveButton(choice.id)}
+                        color="error"
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </Box>
-                ) : (
-                  <Box sx={{ p: 2, textAlign: 'center' }}>
-                    <MovieIcon sx={{ fontSize: 40, mb: 1 }} />
-                    <div>Cliquez pour ajouter un média</div>
-                  </Box>
-                )}
-              </Box>
-            )}
-
-            {/* Audio Element */}
-            {audioUrl && (
-              <audio
-                ref={audioRef}
-                src={audioUrl}
-                loop={data.content?.audio?.loop}
-                muted={audioState.isMuted}
-                preload="auto"
-                onError={(e) => {
-                  console.error('Audio error:', e);
-                  setError('Failed to play audio');
-                }}
-              />
-            )}
-
-            {/* Controls Overlay */}
-            {!data.isPlaybackMode && isHovered && (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  p: 1,
-                  display: 'flex',
-                  gap: 1,
-                  background: 'rgba(0, 0, 0, 0.5)',
-                  borderRadius: '0 0 0 4px',
-                }}
-              >
-                <IconButton
-                  size="small"
-                  onClick={() => setIsMediaDialogOpen(true)}
-                  sx={{ bgcolor: 'background.paper' }}
-                >
-                  <EditIcon />
-                </IconButton>
-                {data.mediaType === 'image' && (
-                  <>
-                    <IconButton
-                      size="small"
-                      onClick={() => setIsTimerDialogOpen(true)}
-                      sx={{ bgcolor: 'background.paper' }}
-                    >
-                      <TimerIcon />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => setIsButtonDialogOpen(true)}
-                      sx={{ bgcolor: 'background.paper' }}
-                    >
-                      <SmartButtonIcon />
-                    </IconButton>
-                  </>
-                )}
-                <IconButton
-                  size="small"
-                  onClick={() => setIsAudioDialogOpen(true)}
-                  sx={{ bgcolor: 'background.paper' }}
-                >
-                  <MusicNoteIcon />
-                </IconButton>
-              </Box>
-            )}
-
-            {/* Volume Controls */}
-            {(audioUrl || data.mediaType === 'video') && !data.isPlaybackMode && isHovered && (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  p: 1,
-                  bgcolor: 'rgba(0, 0, 0, 0.5)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                }}
-              >
-                <IconButton
-                  size="small"
-                  onClick={handleMuteToggle}
-                  sx={{ color: 'white' }}
-                >
-                  {audioState.isMuted ? <VolumeOffIcon /> : <VolumeUpIcon />}
-                </IconButton>
-                <Slider
-                  size="small"
-                  value={audioState.volume}
-                  onChange={handleVolumeChange}
-                  min={0}
-                  max={1}
-                  step={0.1}
-                  sx={{
-                    width: 100,
-                    color: 'white',
-                    '& .MuiSlider-thumb': {
-                      width: 12,
-                      height: 12,
-                    },
-                  }}
-                />
-              </Box>
-            )}
-          </Box>
-        </Box>
-
-        <Handle type="source" position={Position.Bottom} />
-      </Paper>
-
-      {/* Button Handles */}
-      {(!data.isPlaybackMode || showButtons) && data.content?.choices?.length > 0 && (
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 1,
-            p: 1,
-            width: '100%',
-            maxWidth: '300px',
-            margin: '8px auto 0',
-          }}
-        >
-          {data.content.choices.map((choice) => (
-            <Box
-              key={choice.id}
-              sx={{
-                position: 'relative',
-                width: '100%',
+                ),
               }}
-            >
-              <Handle
-                type="source"
-                position={Position.Right}
-                id={`button-handle-${choice.id}`}
-                style={{
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  right: '-15px',
-                  width: '15px',
-                  height: '15px',
-                  background: '#555',
-                  border: '2px solid #fff',
-                  zIndex: 1000,
-                  cursor: 'crosshair',
-                }}
-              />
-              <Button
-                variant="contained"
-                fullWidth
-                onClick={() => data.onChoiceSelect?.(id, choice)}
-                sx={{
-                  bgcolor: 'rgba(0, 0, 0, 0.75)',
-                  backdropFilter: 'blur(8px)',
-                  color: '#fff',
-                  border: '2px solid rgba(255, 255, 255, 0.5)',
-                  borderRadius: '8px',
-                  padding: '8px 16px',
-                  textTransform: 'none',
-                  fontSize: '0.9rem',
-                  '&:hover': {
-                    bgcolor: 'rgba(0, 0, 0, 0.9)',
-                    borderColor: 'white',
-                  },
-                  position: 'relative',
-                  zIndex: 1,
-                }}
-              >
-                {choice.text}
-              </Button>
-            </Box>
-          ))}
+            />
+          </Paper>
+        )}
+      </Box>
+    ));
+  };
+
+  // Rendu du formulaire d'ajout de bouton
+  const renderAddButtonForm = () => {
+    if (data.isPlaybackMode) return null;
+
+    return (
+      <Box sx={nodeStyles.addButtonForm}>
+        <TextField
+          size="small"
+          value={newButtonText}
+          onChange={(e) => setNewButtonText(e.target.value)}
+          placeholder="Texte du bouton"
+          fullWidth
+          variant="outlined"
+        />
+        <Button
+          variant="contained"
+          onClick={handleAddButton}
+          disabled={!newButtonText.trim()}
+          startIcon={<AddIcon />}
+        >
+          Ajouter
+        </Button>
+      </Box>
+    );
+  };
+
+  // Rendu des contrôles média
+  const renderMediaControls = () => {
+    if (!data.isPlaybackMode) return null;
+
+    return (
+      <Box
+        className="media-controls"
+        sx={nodeStyles.controls}
+      >
+        <Stack direction="row" spacing={1} alignItems="center" width="100%">
+          <IconButton
+            size="small"
+            onClick={audioState.isPlaying ? handlePauseAudio : handlePlayAudio}
+            sx={{ color: 'white' }}
+          >
+            {audioState.isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
+          </IconButton>
+          
+          <IconButton
+            size="small"
+            onClick={handleMuteToggle}
+            sx={{ color: 'white' }}
+          >
+            {audioState.isMuted ? <VolumeOffIcon /> : <VolumeUpIcon />}
+          </IconButton>
+          
+          <Slider
+            size="small"
+            value={audioState.volume}
+            onChange={handleVolumeChange}
+            min={0}
+            max={1}
+            step={0.01}
+            sx={{
+              width: 100,
+              color: 'white',
+              '& .MuiSlider-thumb': {
+                width: 12,
+                height: 12,
+              },
+              '& .MuiSlider-rail, & .MuiSlider-track': {
+                height: 4,
+              },
+            }}
+          />
+
+          {error && (
+            <Tooltip title={error}>
+              <ErrorIcon color="error" fontSize="small" />
+            </Tooltip>
+          )}
+        </Stack>
+      </Box>
+    );
+  };
+
+  // Rendu principal du composant
+  return (
+    <Box sx={nodeStyles.root}>
+      <Handle
+        type="target"
+        position={Position.Top}
+        isConnectable={true}
+      />
+
+      {/* Container média */}
+      <Box sx={nodeStyles.mediaContainer}>
+        {data.mediaType === 'image' && mediaUrl && (
+          <img
+            src={mediaUrl}
+            alt="Media content"
+            style={{
+              maxWidth: '100%',
+              maxHeight: '300px',
+              objectFit: 'contain',
+            }}
+          />
+        )}
+
+        {data.mediaType === 'video' && mediaUrl && (
+          <video
+            ref={videoRef}
+            src={mediaUrl}
+            controls={!data.isPlaybackMode}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '300px',
+            }}
+          />
+        )}
+
+        {/* Contrôles média */}
+        {renderMediaControls()}
+
+        {/* Audio caché */}
+        <audio
+          ref={audioRef}
+          style={{ display: 'none' }}
+        />
+      </Box>
+
+      {/* Boutons de choix */}
+      <Box sx={nodeStyles.buttonContainer}>
+        {renderChoiceButtons()}
+        {renderAddButtonForm()}
+      </Box>
+
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        isConnectable={true}
+      />
+
+      {/* Actions du nœud */}
+      {!data.isPlaybackMode && (
+        <Box sx={{ mt: 2, display: 'flex', gap: 1, justifyContent: 'center' }}>
+          <Button
+            size="small"
+            startIcon={<ImageIcon />}
+            onClick={() => setIsMediaDialogOpen(true)}
+          >
+            {data.mediaId ? 'Changer' : 'Ajouter'} média
+          </Button>
+          <Button
+            size="small"
+            startIcon={<MusicNoteIcon />}
+            onClick={() => setIsAudioDialogOpen(true)}
+          >
+            {data.audioId ? 'Changer' : 'Ajouter'} audio
+          </Button>
         </Box>
       )}
 
-      {/* Media Selection Dialog */}
+      {/* Dialogs */}
       <Dialog
         open={isMediaDialogOpen}
         onClose={() => setIsMediaDialogOpen(false)}
@@ -822,12 +847,11 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
         <DialogContent sx={{ minHeight: '80vh', p: 0 }}>
           <MediaLibrary
             onSelect={handleMediaSelect}
-            acceptedTypes={['video/mp4', 'video/webm', 'image/jpeg', 'image/png', 'image/gif']}
+            acceptedTypes={['image/*', 'video/*']}
           />
         </DialogContent>
       </Dialog>
 
-      {/* Audio Selection Dialog */}
       <Dialog
         open={isAudioDialogOpen}
         onClose={() => setIsAudioDialogOpen(false)}
@@ -838,108 +862,9 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
         <DialogContent sx={{ minHeight: '80vh', p: 0 }}>
           <MediaLibrary
             onSelect={handleAudioSelect}
-            acceptedTypes={['audio/mpeg', 'audio/wav', 'audio/ogg']}
+            acceptedTypes={['audio/*']}
           />
         </DialogContent>
-      </Dialog>
-
-      {/* Timer Settings Dialog */}
-      {data.mediaType === 'image' && (
-        <TimerSettings
-          open={isTimerDialogOpen}
-          onClose={() => setIsTimerDialogOpen(false)}
-          timer={{
-            duration: data.content?.timer?.duration ?? 5,
-            autoTransition: data.content?.timer?.autoTransition ?? false,
-            loop: data.content?.timer?.loop ?? false,
-          }}
-          onSave={(timer) => {
-            if (data.onDataChange) {
-              data.onDataChange(id, {
-                ...data,
-                content: {
-                  ...data.content,
-                  timer,
-                },
-              });
-            }
-          }}
-        />
-      )}
-
-      {/* Button Editor Dialog */}
-      <Dialog
-        open={isButtonDialogOpen}
-        onClose={() => setIsButtonDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Gérer les Boutons</DialogTitle>
-        <DialogContent>
-          <Stack spacing={3}>
-            {/* Add new button */}
-            <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-              <TextField
-                fullWidth
-                label="Texte du bouton"
-                value={newButtonText}
-                onChange={(e) => setNewButtonText(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    handleAddButton();
-                  }
-                }}
-              />
-              <Tooltip title="Ajouter">
-                <IconButton
-                  onClick={handleAddButton}
-                  color="primary"
-                  disabled={!newButtonText.trim()}
-                >
-                  <AddIcon />
-                </IconButton>
-              </Tooltip>
-            </Box>
-
-            {/* Button list */}
-            <List>
-              {data.content?.choices?.map((choice) => (
-                <ListItem
-                  key={choice.id}
-                  sx={{
-                    bgcolor: 'background.paper',
-                    mb: 1,
-                    borderRadius: 1,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                  }}
-                >
-                  <TextField
-                    fullWidth
-                    value={choice.text}
-                    onChange={(e) => handleEditButtonText(choice.id, e.target.value)}
-                    variant="standard"
-                    sx={{ mr: 2 }}
-                  />
-                  <ListItemSecondaryAction>
-                    <Tooltip title="Supprimer">
-                      <IconButton
-                        edge="end"
-                        onClick={() => handleRemoveButton(choice.id)}
-                        color="error"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </ListItemSecondaryAction>
-                </ListItem>
-              ))}
-            </List>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setIsButtonDialogOpen(false)}>Fermer</Button>
-        </DialogActions>
       </Dialog>
 
       {error && (
@@ -947,7 +872,7 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
           {error}
         </Box>
       )}
-    </div>
+    </Box>
   );
 };
 
