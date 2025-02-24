@@ -1,10 +1,24 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, CircularProgress, Typography, Button } from '@mui/material';
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, CircularProgress } from '@mui/material';
 import { MediaLibraryService } from '../../services/MediaLibraryService';
 import { MediaFile } from '../../types/media';
 
 interface MiniPovPlayerProps {
-  scenario: any;
+  scenario: {
+    nodes: {
+      id: string;
+      data: {
+        mediaId?: string;
+        content?: {
+          videoUrl?: string;
+          video?: {
+            url?: string;
+            name?: string;
+          };
+        };
+      };
+    }[];
+  };
   isHovered?: boolean;
 }
 
@@ -12,207 +26,178 @@ const MiniPovPlayer: React.FC<MiniPovPlayerProps> = ({
   scenario,
   isHovered = false
 }) => {
-  const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'video' | 'image'>('video');
   const [isLoading, setIsLoading] = useState(true);
-  const [choices, setChoices] = useState<any[]>([]);
+  const [volume, setVolume] = useState(1);
   const mediaLibrary = useRef<MediaLibraryService | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Gérer la fin de la vidéo
-  const handleVideoEnd = useCallback(() => {
-    console.log('MiniPovPlayer: Video ended');
-    const currentNode = scenario.nodes.find((n: any) => n.id === currentNodeId);
-    if (!currentNode) return;
-
-    // Trouver les edges sortants
-    const outgoingEdges = scenario.edges?.filter((e: any) => e.source === currentNodeId) || [];
-    console.log('MiniPovPlayer: Outgoing edges:', outgoingEdges);
-
-    if (outgoingEdges.length === 1 && !outgoingEdges[0].sourceHandle) {
-      // Transition automatique si un seul edge sans handle
-      const nextNodeId = outgoingEdges[0].target;
-      console.log('MiniPovPlayer: Auto transitioning to:', nextNodeId);
-      setCurrentNodeId(nextNodeId);
-    } else if (outgoingEdges.length > 0) {
-      // Afficher les choix si plusieurs edges
-      const choicesData = outgoingEdges.map(edge => ({
-        id: edge.id,
-        label: edge.data?.label || 'Suivant',
-        targetId: edge.target
-      }));
-      console.log('MiniPovPlayer: Setting choices:', choicesData);
-      setChoices(choicesData);
-    } else {
-      console.log('MiniPovPlayer: No outgoing edges, restarting video');
-      if (videoRef.current) {
-        videoRef.current.currentTime = 0;
-        videoRef.current.play();
-      }
-    }
-  }, [currentNodeId, scenario]);
-
-  // Gérer la sélection d'un choix
-  const handleChoiceSelect = useCallback((targetId: string) => {
-    console.log('MiniPovPlayer: Choice selected, transitioning to:', targetId);
-    setCurrentNodeId(targetId);
-    setChoices([]);
-  }, []);
-
-  // Charger le média pour un node
-  const loadNodeMedia = useCallback(async (node: any) => {
-    if (!node) return;
-    
-    console.log('MiniPovPlayer: Loading media for node:', node);
-    const mediaId = node.data?.mediaId;
-    
-    if (!mediaId) {
-      console.log('MiniPovPlayer: No media ID found for node');
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      if (!mediaLibrary.current) {
-        mediaLibrary.current = await MediaLibraryService.getInstance();
-      }
-
-      const media = scenario.media?.[mediaId] || await mediaLibrary.current.getMedia(mediaId);
+  // Charger le média du premier nœud
+  useEffect(() => {
+    const loadFirstNodeMedia = async () => {
+      console.log('MiniPovPlayer: Loading first node media', { scenario });
       
-      if (media?.url) {
-        console.log('MiniPovPlayer: Media loaded:', {
-          id: mediaId,
-          type: media.metadata.type,
-          hasUrl: !!media.url
-        });
-        setMediaUrl(media.url);
-        setMediaType(media.metadata.type as 'video' | 'image');
+      if (!scenario || !scenario.nodes || !Array.isArray(scenario.nodes) || scenario.nodes.length === 0) {
+        console.error('Invalid scenario structure:', scenario);
         setIsLoading(false);
-      } else {
-        console.warn('MiniPovPlayer: No media URL found');
-        setIsLoading(false);
+        return;
       }
-    } catch (error) {
-      console.error('MiniPovPlayer: Error loading media:', error);
+
+      const firstNode = scenario.nodes[0];
+      const mediaId = firstNode.data?.mediaId;
+      console.log('MiniPovPlayer: First node media ID:', mediaId);
+
+      if (!mediaId) {
+        // Essayer de récupérer l'URL de la vidéo depuis content
+        const videoUrl = firstNode.data?.content?.videoUrl || firstNode.data?.content?.video?.url;
+        console.log('MiniPovPlayer: Trying video URL from content:', videoUrl);
+        if (videoUrl) {
+          setMediaUrl(videoUrl);
+          setMediaType('video');
+          setIsLoading(false);
+          return;
+        }
+        console.warn('No media ID or video URL found in first node');
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        if (!mediaLibrary.current) {
+          console.log('MiniPovPlayer: Initializing MediaLibraryService');
+          mediaLibrary.current = await MediaLibraryService.getInstance();
+        }
+
+        console.log('MiniPovPlayer: Loading media with ID:', mediaId);
+        const media = await mediaLibrary.current.getMedia(mediaId);
+        console.log('MiniPovPlayer: Media loaded:', media);
+        
+        if (media?.url) {
+          setMediaUrl(media.url);
+          setMediaType(media.metadata.type as 'video' | 'image');
+          console.log('MiniPovPlayer: Media URL and type set:', {
+            url: media.url,
+            type: media.metadata.type
+          });
+        }
+      } catch (error) {
+        console.error('MiniPovPlayer: Error loading media:', error);
+      }
+      
       setIsLoading(false);
-    }
+    };
+
+    loadFirstNodeMedia();
   }, [scenario]);
 
-  // Charger le média quand le node change
+  // Gérer la lecture/pause et le volume en fonction du hover
   useEffect(() => {
-    if (!currentNodeId) {
-      // Charger le premier node avec média
-      const firstNode = scenario.nodes?.find((n: any) => n.data?.mediaId);
-      if (firstNode) {
-        console.log('MiniPovPlayer: Loading first node:', firstNode.id);
-        setCurrentNodeId(firstNode.id);
-      }
-      return;
+    if (!videoRef.current || !mediaUrl) return;
+
+    const video = videoRef.current;
+    console.log('MiniPovPlayer: Video element state:', {
+      currentTime: video.currentTime,
+      paused: video.paused,
+      volume: video.volume,
+      isHovered
+    });
+
+    if (isHovered) {
+      // Démarrer la lecture et monter progressivement le volume
+      console.log('MiniPovPlayer: Starting playback on hover');
+      video.play().catch(error => {
+        console.error('MiniPovPlayer: Error playing video:', error);
+      });
+      
+      // Fade in du volume
+      let currentVolume = 0;
+      const fadeInterval = setInterval(() => {
+        currentVolume = Math.min(currentVolume + 0.1, volume);
+        video.volume = currentVolume;
+        console.log('MiniPovPlayer: Fading in volume:', currentVolume);
+        if (currentVolume >= volume) {
+          clearInterval(fadeInterval);
+        }
+      }, 50);
+
+    } else {
+      // Fade out du volume et pause
+      console.log('MiniPovPlayer: Starting fade out');
+      let currentVolume = video.volume;
+      const fadeInterval = setInterval(() => {
+        currentVolume = Math.max(currentVolume - 0.1, 0);
+        video.volume = currentVolume;
+        console.log('MiniPovPlayer: Fading out volume:', currentVolume);
+        if (currentVolume <= 0) {
+          clearInterval(fadeInterval);
+          video.pause();
+          video.currentTime = 0;
+          console.log('MiniPovPlayer: Playback paused and reset');
+        }
+      }, 50);
     }
 
-    const node = scenario.nodes?.find((n: any) => n.id === currentNodeId);
-    loadNodeMedia(node);
-  }, [currentNodeId, loadNodeMedia, scenario]);
-
-  // Pause/Play en fonction du hover
-  useEffect(() => {
-    if (videoRef.current) {
-      if (isHovered) {
-        console.log('MiniPovPlayer: Starting playback on hover');
-        videoRef.current.play().catch(error => {
-          console.warn('MiniPovPlayer: Autoplay failed:', error);
-        });
-      } else {
-        console.log('MiniPovPlayer: Pausing playback on hover end');
+    // Cleanup
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.volume = 0;
         videoRef.current.pause();
-        videoRef.current.currentTime = 0;
+        console.log('MiniPovPlayer: Cleanup - volume set to 0 and playback paused');
       }
-    }
-  }, [isHovered]);
+    };
+  }, [isHovered, mediaUrl, volume]);
+
+  if (isLoading) {
+    return (
+      <Box
+        sx={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: 'background.paper',
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
-    <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
-      {isLoading ? (
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+    <Box
+      sx={{
+        width: '100%',
+        height: '100%',
+        position: 'relative',
+        overflow: 'hidden',
+        bgcolor: 'background.paper',
+      }}
+    >
+      {mediaType === 'video' && mediaUrl && (
+        <video
+          ref={videoRef}
+          src={mediaUrl}
+          style={{
+            width: '100%',
             height: '100%',
+            objectFit: 'cover',
           }}
-        >
-          <CircularProgress size={24} />
-        </Box>
-      ) : mediaUrl ? (
-        <>
-          {mediaType === 'video' ? (
-            <video
-              ref={videoRef}
-              src={mediaUrl}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-              }}
-              muted
-              playsInline
-              loop={choices.length === 0}
-              onEnded={handleVideoEnd}
-            />
-          ) : (
-            <img
-              src={mediaUrl}
-              alt="Media content"
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-              }}
-            />
-          )}
-          {choices.length > 0 && (
-            <Box
-              sx={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                display: 'flex',
-                justifyContent: 'center',
-                gap: 1,
-                p: 1,
-                bgcolor: 'rgba(0, 0, 0, 0.5)',
-              }}
-            >
-              {choices.map(choice => (
-                <Button
-                  key={choice.id}
-                  variant="contained"
-                  size="small"
-                  onClick={() => handleChoiceSelect(choice.targetId)}
-                  sx={{ minWidth: 0, px: 1 }}
-                >
-                  {choice.label}
-                </Button>
-              ))}
-            </Box>
-          )}
-        </>
-      ) : (
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+          playsInline
+          loop
+        />
+      )}
+      {mediaType === 'image' && mediaUrl && (
+        <img
+          src={mediaUrl}
+          alt=""
+          style={{
+            width: '100%',
             height: '100%',
-            bgcolor: 'action.hover',
+            objectFit: 'cover',
           }}
-        >
-          <Typography variant="body2" color="text.secondary">
-            Aucun média disponible
-          </Typography>
-        </Box>
+        />
       )}
     </Box>
   );

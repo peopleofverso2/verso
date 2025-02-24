@@ -134,21 +134,16 @@ const ProjectMetadataDialog: React.FC<ProjectMetadataDialogProps> = ({
 };
 
 export const ProjectLibrary: React.FC = () => {
+  const { isAuthenticated, signInWithGoogle, signOut, user } = useAuth();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [projects, setProjects] = useState<ProjectMetadata[]>([]);
   const [loading, setLoading] = useState(true);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [newProjectTitle, setNewProjectTitle] = useState('');
-  const [newProjectDescription, setNewProjectDescription] = useState('');
-  const [editingProject, setEditingProject] = useState<ProjectMetadata | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showPovPlayer, setShowPovPlayer] = useState(false);
-  const [povFile, setPovFile] = useState<any>(null);
   const [selectedProject, setSelectedProject] = useState<ProjectMetadata | null>(null);
-  const [metadataDialogOpen, setMetadataDialogOpen] = useState(false);
-  const [povPlayerOpen, setPovPlayerOpen] = useState(false);
-  const [povScenario, setPovScenario] = useState<any>(null);
+  const [isMetadataDialogOpen, setIsMetadataDialogOpen] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [newProjectTitle, setNewProjectTitle] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const projectService = useRef(ProjectService.getInstance());
@@ -226,7 +221,35 @@ export const ProjectLibrary: React.FC = () => {
     loadProjects();
   }, []);
 
-  const handleCreateProject = async () => {
+  const handleProjectSelect = async (projectId: string) => {
+    if (!isAuthenticated()) {
+      setError("Vous devez être connecté pour éditer un projet");
+      return;
+    }
+    navigate(`/editor/${projectId}`);
+  };
+
+  const handleCreateProject = () => {
+    if (!isAuthenticated()) {
+      setError("Vous devez être connecté pour créer un projet");
+      return;
+    }
+    setIsCreateDialogOpen(true);
+  };
+
+  const handleDeleteProject = (projectId: string) => {
+    if (!isAuthenticated()) {
+      setError("Vous devez être connecté pour supprimer un projet");
+      return;
+    }
+    const project = projects.find(p => p.projectId === projectId);
+    if (project) {
+      setSelectedProject(project);
+      setIsDeleteDialogOpen(true);
+    }
+  };
+
+  const handleCreateProjectSubmit = async () => {
     if (!newProjectTitle.trim()) {
       setError('Le titre est requis');
       return;
@@ -236,13 +259,12 @@ export const ProjectLibrary: React.FC = () => {
       console.log('Creating project with title:', newProjectTitle);
       const projectId = await projectService.current.createProject(
         newProjectTitle,
-        newProjectDescription
+        ''
       );
       console.log('Project created with ID:', projectId);
       
-      setCreateDialogOpen(false);
+      setIsCreateDialogOpen(false);
       setNewProjectTitle('');
-      setNewProjectDescription('');
       
       console.log('Reloading projects...');
       await loadProjects();
@@ -252,16 +274,6 @@ export const ProjectLibrary: React.FC = () => {
     } catch (error) {
       console.error('Error creating project:', error);
       setError('Erreur lors de la création du projet');
-    }
-  };
-
-  const handleDeleteProject = async (projectId: string) => {
-    try {
-      await projectService.current.deleteProject(projectId);
-      await loadProjects();
-    } catch (error) {
-      console.error('Error deleting project:', error);
-      setError('Erreur lors de la suppression du projet');
     }
   };
 
@@ -347,13 +359,6 @@ export const ProjectLibrary: React.FC = () => {
     event.target.value = '';
   };
 
-  const handleKeyPress = (event: React.KeyboardEvent) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      handleCreateProject();
-    }
-  };
-
   const handleImportPov = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -389,22 +394,13 @@ export const ProjectLibrary: React.FC = () => {
       // Recharger la liste des projets
       await loadProjects();
       
-      setSnackbar({
-        open: true,
-        message: 'Projet importé avec succès',
-        severity: 'success'
-      });
+      setError("Projet importé avec succès");
       
       // Rediriger vers l'éditeur
       navigate(`/editor/${projectId}`);
     } catch (error) {
       console.error('Error importing POV:', error);
       setError(error instanceof Error ? error.message : 'Erreur lors de l\'import du fichier POV');
-      setSnackbar({
-        open: true,
-        message: 'Erreur lors de l\'import du fichier POV',
-        severity: 'error'
-      });
     } finally {
       setLoading(false);
       if (event.target) {
@@ -429,100 +425,147 @@ export const ProjectLibrary: React.FC = () => {
       );
       console.log('POV file created:', povFile);
 
-      setPovFile(povFile);
-      setShowPovPlayer(true);
+      setIsMetadataDialogOpen(false);
+      navigate(`/player/${project.projectId}`);
     } catch (error) {
       console.error('Error playing scenario:', error);
       setError('Erreur lors du lancement du scénario');
     }
   };
 
-  const handleProjectSelect = (projectId: string) => {
-    navigate(`/editor/${projectId}`);
+  const handleImportClick = () => {
+    if (!isAuthenticated()) {
+      setError("Vous devez être connecté pour importer un projet");
+      return;
+    }
+    fileInputRef.current?.click();
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* PovPlayer Modal */}
-      {showPovPlayer && povFile && (
-        <PovPlayer
-          scenario={povFile}
-          onClose={() => {
-            setShowPovPlayer(false);
-            setPovFile(null);
-          }}
-        />
-      )}
-
-      <AppBar position="static" sx={{ mb: 3 }}>
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Verso Project Library
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <AppBar position="static" color="default" elevation={1}>
+        <Toolbar sx={{ justifyContent: 'space-between' }}>
+          <Typography variant="h6" component="div">
+            Bibliothèque de Projets
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <IconButton
-              color="inherit"
-              onClick={() => navigate('/settings')}
-              title="Settings"
-            >
-              <SettingsIcon />
-            </IconButton>
-            <LoginButton />
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            {isAuthenticated() ? (
+              <>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    startIcon={<AddIcon />}
+                    onClick={handleCreateProject}
+                    variant="contained"
+                    color="primary"
+                  >
+                    Nouveau Projet
+                  </Button>
+                  <Button
+                    startIcon={<UploadFileIcon />}
+                    onClick={handleImportClick}
+                    variant="outlined"
+                    color="primary"
+                  >
+                    Importer POV
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pov"
+                    style={{ display: 'none' }}
+                    onChange={handleImportPov}
+                  />
+                </Box>
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 2,
+                  ml: 2,
+                  borderLeft: '1px solid rgba(255, 255, 255, 0.12)',
+                  pl: 2
+                }}>
+                  {user?.photoURL && (
+                    <Box
+                      component="img"
+                      src={user.photoURL}
+                      alt={user.displayName || ''}
+                      sx={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: '50%',
+                      }}
+                    />
+                  )}
+                  <Typography variant="body1" sx={{ color: 'text.primary' }}>
+                    {user?.displayName}
+                  </Typography>
+                  <IconButton onClick={() => navigate('/settings')} sx={{ color: 'text.primary' }}>
+                    <SettingsIcon />
+                  </IconButton>
+                  <Button
+                    onClick={signOut}
+                    variant="outlined"
+                    color="inherit"
+                    size="small"
+                  >
+                    Se déconnecter
+                  </Button>
+                </Box>
+              </>
+            ) : (
+              <Button
+                onClick={signInWithGoogle}
+                variant="contained"
+                color="primary"
+                startIcon={<img 
+                  src="https://www.google.com/favicon.ico" 
+                  alt="" 
+                  style={{ width: 16, height: 16 }} 
+                />}
+              >
+                Se connecter avec Google
+              </Button>
+            )}
           </Box>
         </Toolbar>
       </AppBar>
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h4" component="h1">
-          Bibliothèque de Projets
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setCreateDialogOpen(true)}
+      <Container sx={{ flex: 1, py: 3, overflow: 'auto' }}>
+        {error && (
+          <Alert 
+            severity="error" 
+            sx={{ mb: 2 }}
+            onClose={() => setError(null)}
           >
-            Nouveau projet
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<UploadFileIcon />}
-            onClick={() => fileInputRef.current?.click()}
+            {error}
+          </Alert>
+        )}
+        
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+              gap: 3,
+            }}
           >
-            Importer un POV
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pov"
-            style={{ display: 'none' }}
-            onChange={handleImportPov}
-          />
-        </Box>
-      </Box>
+            {projects.map((project) => (
+              <ProjectCard
+                key={project.projectId}
+                project={project}
+                onProjectSelect={handleProjectSelect}
+                onProjectDelete={handleDeleteProject}
+              />
+            ))}
+          </Box>
+        )}
+      </Container>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {loading ? (
-        <CircularProgress />
-      ) : (
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 2 }}>
-          {projects.map((project) => (
-            <ProjectCard
-              key={project.projectId}
-              project={project}
-              onProjectSelect={() => navigate(`/editor/${project.projectId}`)}
-              onProjectDelete={handleDeleteProject}
-            />
-          ))}
-        </Box>
-      )}
-
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)}>
+      <Dialog open={isCreateDialogOpen} onClose={() => setIsCreateDialogOpen(false)}>
         <DialogTitle>Nouveau Projet</DialogTitle>
         <DialogContent>
           <TextField
@@ -532,24 +575,14 @@ export const ProjectLibrary: React.FC = () => {
             fullWidth
             value={newProjectTitle}
             onChange={(e) => setNewProjectTitle(e.target.value)}
-            onKeyPress={handleKeyPress}
             error={error === 'Le titre est requis'}
             helperText={error === 'Le titre est requis' ? 'Le titre est requis' : ''}
           />
-          <TextField
-            margin="dense"
-            label="Description"
-            fullWidth
-            multiline
-            rows={3}
-            value={newProjectDescription}
-            onChange={(e) => setNewProjectDescription(e.target.value)}
-          />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)}>Annuler</Button>
+          <Button onClick={() => setIsCreateDialogOpen(false)}>Annuler</Button>
           <Button 
-            onClick={handleCreateProject} 
+            onClick={handleCreateProjectSubmit} 
             variant="contained" 
             color="primary"
             disabled={!newProjectTitle.trim()}
@@ -559,14 +592,28 @@ export const ProjectLibrary: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {editingProject && (
-        <ProjectMetadataDialog
-          open={!!editingProject}
-          project={editingProject}
-          onClose={() => setEditingProject(null)}
-          onSave={handleUpdateMetadata}
-        />
+      {selectedProject && (
+        <Dialog open={isDeleteDialogOpen} onClose={() => setIsDeleteDialogOpen(false)}>
+          <DialogTitle>Supprimer le projet</DialogTitle>
+          <DialogContent>
+            Êtes-vous sûr de vouloir supprimer le projet {selectedProject.scenario?.scenarioTitle} ?
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setIsDeleteDialogOpen(false)}>Annuler</Button>
+            <Button 
+              onClick={() => {
+                projectService.current.deleteProject(selectedProject.projectId);
+                setIsDeleteDialogOpen(false);
+                loadProjects();
+              }} 
+              variant="contained" 
+              color="error"
+            >
+              Supprimer
+            </Button>
+          </DialogActions>
+        </Dialog>
       )}
-    </Container>
+    </Box>
   );
 };

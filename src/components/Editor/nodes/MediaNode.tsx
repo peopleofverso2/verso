@@ -182,97 +182,122 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
     };
   }, [mediaLibrary, data.audioId]);
 
-  // Playback control effect
-  useEffect(() => {
-    if (data.isPlaybackMode) {
-      // Démarrer la lecture automatiquement en mode playback
-      if (videoRef.current) {
-        videoRef.current.play().catch(console.error);
-        setIsPlaying(true);
-      }
-      if (audioRef.current) {
-        // Appliquer le fade-in si configuré
-        if (data.content?.audio?.fadeIn) {
-          audioRef.current.volume = 0;
-          const targetVolume = data.content.audio.volume ?? 1;
-          const fadeInDuration = data.content.audio.fadeIn * 1000;
-          const steps = 50;
-          const stepTime = fadeInDuration / steps;
-          const volumeStep = targetVolume / steps;
-
-          let currentStep = 0;
-          const fadeInterval = setInterval(() => {
-            currentStep++;
-            if (audioRef.current && currentStep <= steps) {
-              audioRef.current.volume = volumeStep * currentStep;
-            } else {
-              clearInterval(fadeInterval);
-            }
-          }, stepTime);
-        }
-        audioRef.current.play().catch(console.error);
-      }
-    } else {
-      // Arrêter la lecture si on n'est pas en mode playback
-      if (videoRef.current) {
-        videoRef.current.pause();
-        setIsPlaying(false);
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-    }
-
-    // Cleanup function
-    return () => {
-      if (videoRef.current) {
-        videoRef.current.pause();
-      }
-      if (audioRef.current) {
-        // Appliquer le fade-out si configuré
-        if (data.content?.audio?.fadeOut) {
-          const currentVolume = audioRef.current.volume;
-          const fadeOutDuration = data.content.audio.fadeOut * 1000;
-          const steps = 50;
-          const stepTime = fadeOutDuration / steps;
-          const volumeStep = currentVolume / steps;
-
-          let currentStep = 0;
-          const fadeInterval = setInterval(() => {
-            currentStep++;
-            if (audioRef.current && currentStep <= steps) {
-              audioRef.current.volume = currentVolume - (volumeStep * currentStep);
-            } else {
-              if (audioRef.current) {
-                audioRef.current.pause();
-              }
-              clearInterval(fadeInterval);
-            }
-          }, stepTime);
-        } else {
-          audioRef.current.pause();
-        }
-      }
-    };
-  }, [data.isPlaybackMode, data.content?.audio]);
-
   // Initialize audio/video properties
   useEffect(() => {
     const initializeMedia = () => {
+      // Initialiser l'audio
       if (audioRef.current) {
-        audioRef.current.volume = volume;
-        audioRef.current.muted = isMuted;
+        audioRef.current.volume = isMuted ? 0 : (data.content?.audio?.volume ?? volume);
         audioRef.current.loop = data.content?.audio?.loop ?? false;
       }
+      // Initialiser la vidéo
       if (videoRef.current) {
-        videoRef.current.volume = volume;
-        videoRef.current.muted = isMuted;
+        videoRef.current.volume = isMuted ? 0 : volume;
         videoRef.current.loop = data.content?.timer?.loop ?? false;
       }
     };
 
     initializeMedia();
-  }, [volume, isMuted, data.content?.audio?.loop, data.content?.timer?.loop, mediaUrl, audioUrl]);
+  }, [volume, isMuted, data.content?.audio?.volume, data.content?.audio?.loop, data.content?.timer?.loop]);
+
+  // Effet pour gérer le son en mode playback
+  useEffect(() => {
+    if (!data.isPlaybackMode) {
+      // Arrêter tout son quand on n'est pas en mode playback
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+        setIsPlaying(false);
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      return;
+    }
+
+    const playMedia = async () => {
+      try {
+        // Démarrer la vidéo si présente
+        if (videoRef.current && data.mediaType === 'video') {
+          await videoRef.current.play();
+          setIsPlaying(true);
+        }
+
+        // Démarrer l'audio si présent
+        if (audioRef.current && audioUrl) {
+          // Gérer le fade-in
+          if (data.content?.audio?.fadeIn) {
+            audioRef.current.volume = 0;
+            const targetVolume = data.content.audio.volume ?? volume;
+            const fadeInDuration = data.content.audio.fadeIn * 1000;
+            const steps = 50;
+            const stepTime = fadeInDuration / steps;
+            const volumeStep = targetVolume / steps;
+
+            let currentStep = 0;
+            const fadeInterval = setInterval(() => {
+              currentStep++;
+              if (audioRef.current && currentStep <= steps) {
+                audioRef.current.volume = isMuted ? 0 : (volumeStep * currentStep);
+              } else {
+                clearInterval(fadeInterval);
+              }
+            }, stepTime);
+          } else {
+            audioRef.current.volume = isMuted ? 0 : (data.content?.audio?.volume ?? volume);
+          }
+
+          await audioRef.current.play();
+        }
+      } catch (error) {
+        console.error('Error playing media:', error);
+      }
+    };
+
+    playMedia();
+
+    // Cleanup
+    return () => {
+      const stopMedia = async () => {
+        // Arrêter la vidéo
+        if (videoRef.current) {
+          videoRef.current.pause();
+          setIsPlaying(false);
+        }
+
+        // Arrêter l'audio avec fade-out si configuré
+        if (audioRef.current) {
+          if (data.content?.audio?.fadeOut) {
+            const currentVolume = audioRef.current.volume;
+            const fadeOutDuration = data.content.audio.fadeOut * 1000;
+            const steps = 50;
+            const stepTime = fadeOutDuration / steps;
+            const volumeStep = currentVolume / steps;
+
+            let currentStep = 0;
+            const fadeInterval = setInterval(() => {
+              currentStep++;
+              if (audioRef.current && currentStep <= steps) {
+                audioRef.current.volume = currentVolume - (volumeStep * currentStep);
+              } else {
+                if (audioRef.current) {
+                  audioRef.current.pause();
+                  audioRef.current.currentTime = 0;
+                }
+                clearInterval(fadeInterval);
+              }
+            }, stepTime);
+          } else {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+          }
+        }
+      };
+
+      stopMedia();
+    };
+  }, [data.isPlaybackMode, audioUrl, data.mediaType, data.content?.audio, volume, isMuted]);
 
   // Timer effect for images
   useEffect(() => {
