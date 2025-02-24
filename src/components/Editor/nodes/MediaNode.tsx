@@ -1,36 +1,45 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Handle, Position } from 'reactflow';
 import {
-  Box,
-  Button,
   Dialog,
-  DialogContent,
   DialogTitle,
+  DialogContent,
+  DialogActions,
   IconButton,
+  Button,
+  Box,
   Paper,
   Slider,
   Stack,
   TextField,
-  Typography,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
   Tooltip,
+  Typography,
+  DragIndicatorIcon,
+  PauseIcon,
+  PlayArrowIcon,
+  ErrorIcon,
 } from '@mui/material';
 import {
+  Edit as EditIcon,
+  VolumeUp as VolumeUpIcon,
+  VolumeOff as VolumeOffIcon,
+  Movie as MovieIcon,
+  Image as ImageIcon,
+  Timer as TimerIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
-  Edit as EditIcon,
-  Image as ImageIcon,
+  SmartButton as SmartButtonIcon,
   MusicNote as MusicNoteIcon,
-  VolumeOff as VolumeOffIcon,
-  VolumeUp as VolumeUpIcon,
-  PlayArrow as PlayArrowIcon,
-  Pause as PauseIcon,
-  Error as ErrorIcon,
-  DragIndicator as DragIndicatorIcon,
 } from '@mui/icons-material';
 import MediaLibrary from '../../../components/MediaLibrary/MediaLibrary';
 import { MediaFile } from '../../../types';
 import { MediaLibraryService } from '../../../services/MediaLibraryService';
 import TimerSettings from './TimerSettings';
+import { useTheme } from '@mui/material/styles';
 
 interface MediaNodeProps {
   id: string;
@@ -106,6 +115,7 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
   const [newButtonText, setNewButtonText] = useState('');
 
   // Styles pour le MediaNode
+  const theme = useTheme();
   const nodeStyles = {
     root: {
       border: (theme: any) => `2px solid ${selected ? theme.palette.primary.main : theme.palette.grey[300]}`,
