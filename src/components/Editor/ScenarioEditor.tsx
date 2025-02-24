@@ -318,7 +318,7 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
 
       // Exporter le scénario au format POV
       const scenario = await povExportService.current.exportScenario(
-        project.scenario.scenarioTitle,
+        project.scenario.scenarioTitle || 'Untitled Scenario',
         nodes,
         edges
       );
@@ -397,7 +397,7 @@ const ScenarioEditorContent: React.FC<ScenarioEditorProps> = ({ projectId }) => 
 
       // Exporter le scénario au format POV
       const scenario = await povExportService.current.exportScenario(
-        project.scenario.scenarioTitle,
+        project.scenario.scenarioTitle || 'Untitled Scenario',
         nodes,
         edges
       );

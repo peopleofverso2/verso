@@ -17,6 +17,7 @@ interface PovPlayerProps {
           video?: {
             url?: string;
             name?: string;
+            volume?: number;
           };
           choices?: {
             id: string;
@@ -126,6 +127,18 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
 
       setMediaUrl(url);
       setMediaType(type);
+
+      // Configurer le volume de la vidéo si c'est une vidéo
+      if (type === 'video' && videoRef.current) {
+        const videoSettings = node.data.content?.video;
+        if (videoSettings) {
+          videoRef.current.volume = videoSettings.volume ?? 1;
+          console.log('Video volume set to:', videoRef.current.volume);
+        } else {
+          videoRef.current.volume = 1;
+          console.log('No video settings found, volume set to 1');
+        }
+      }
 
       // Démarrer le timer pour les images si configuré
       if (type === 'image' && node.data.content?.timer?.autoTransition) {
@@ -285,6 +298,11 @@ const PovPlayer: React.FC<PovPlayerProps> = ({ scenario, onClose }) => {
       clearTimers();
       if (mediaUrl?.startsWith('blob:')) {
         URL.revokeObjectURL(mediaUrl);
+      }
+      // Réinitialiser le volume de la vidéo
+      if (videoRef.current) {
+        videoRef.current.volume = 0;
+        videoRef.current.pause();
       }
       if (audioRef.current) {
         const audio = audioRef.current;

@@ -6,7 +6,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ProjectLibrary } from './components/ProjectLibrary/ProjectLibrary';
 import { ScenarioEditor } from './components/Editor/ScenarioEditor';
 import { ConfigPage } from './components/Settings/ConfigPage';
-import { MediaLibraryService } from './services/MediaLibraryService'; // Import MediaLibraryService
+import { MediaLibraryService } from './services/MediaLibraryService';
+import { PrivateRoute } from './components/Auth/PrivateRoute';
 
 const App: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState(false);
@@ -59,8 +60,22 @@ const App: React.FC = () => {
           <Container maxWidth={false} disableGutters sx={{ height: '100vh', overflow: 'hidden' }}>
             <Routes>
               <Route path="/" element={<ProjectLibrary />} />
-              <Route path="/editor/:projectId" element={<ScenarioEditor />} />
-              <Route path="/settings" element={<ConfigPage />} />
+              <Route 
+                path="/editor/:projectId" 
+                element={
+                  <PrivateRoute>
+                    <ScenarioEditor />
+                  </PrivateRoute>
+                } 
+              />
+              <Route 
+                path="/settings" 
+                element={
+                  <PrivateRoute>
+                    <ConfigPage />
+                  </PrivateRoute>
+                } 
+              />
             </Routes>
           </Container>
         </Router>

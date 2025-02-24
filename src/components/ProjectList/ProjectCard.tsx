@@ -7,7 +7,6 @@ import {
   IconButton,
   Box,
   CircularProgress,
-  CardActionArea,
   Dialog,
   Slide,
 } from '@mui/material';
@@ -20,6 +19,7 @@ import {
 import { ProjectMetadata } from '../../types/project';
 import { ProjectService } from '../../services/projectService';
 import { MediaLibraryService } from '../../services/MediaLibraryService';
+import { PovExportService } from '../../services/PovExportService';
 import MiniPovPlayer from '../Player/MiniPovPlayer';
 import PovPlayer from '../Player/PovPlayer';
 
@@ -40,6 +40,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const mediaLibrary = React.useRef<MediaLibraryService | null>(null);
   const [isMediaLibraryReady, setIsMediaLibraryReady] = React.useState(false);
+  const [povExportService] = React.useState(() => PovExportService.getInstance());
 
   // Initialiser MediaLibrary
   React.useEffect(() => {
@@ -80,68 +81,26 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
           nodesCount: fullProject.nodes?.length,
           hasMedia: !!fullProject.media,
           mediaCount: Object.keys(fullProject.media || {}).length,
-          nodes: fullProject.nodes,
-          media: fullProject.media
         });
         
         // Vérifier la structure du projet
         const hasValidNodes = fullProject.nodes?.length > 0;
-        const hasValidMedia = fullProject.media && Object.keys(fullProject.media).length > 0;
         
-        console.log('ProjectCard: Project validation:', {
-          hasValidNodes,
-          hasValidMedia,
-          nodesCount: fullProject.nodes?.length,
-          mediaCount: Object.keys(fullProject.media || {}).length
-        });
-
-        if (hasValidNodes || hasValidMedia) {
-          // Pré-charger les médias pour s'assurer que les URLs sont créées
-          console.log('ProjectCard: Starting media preload...');
-          const mediaMap: Record<string, any> = {};
-          const mediaPromises = fullProject.nodes?.map(async (node) => {
-            if (node.data?.mediaId) {
-              try {
-                console.log('ProjectCard: Preloading media:', node.data.mediaId);
-                const media = await mediaLibrary.current?.getMedia(node.data.mediaId);
-                console.log('ProjectCard: Media preloaded:', {
-                  mediaId: node.data.mediaId,
-                  hasUrl: !!media?.url,
-                  metadata: media?.metadata
-                });
-                if (media) {
-                  mediaMap[node.data.mediaId] = media;
-                }
-                return media;
-              } catch (error) {
-                console.warn('ProjectCard: Failed to preload media:', {
-                  mediaId: node.data.mediaId,
-                  error
-                });
-              }
-            }
-            return null;
-          }) || [];
-
-          const preloadedMedia = await Promise.all(mediaPromises);
-          console.log('ProjectCard: All media preloaded:', {
-            totalMedia: mediaPromises.length,
-            successfulLoads: preloadedMedia.filter(m => m !== null).length,
-            mediaMap
-          });
-
-          console.log('ProjectCard: Setting scenario state with:', {
-            nodes: fullProject.nodes?.length,
-            mediaCount: Object.keys(mediaMap).length,
-            preloadedMediaCount: preloadedMedia.filter(m => m !== null).length,
-            mediaMapContent: mediaMap
+        if (hasValidNodes) {
+          // Utiliser PovExportService pour exporter le scénario correctement
+          const exportedScenario = await povExportService.exportScenario(
+            fullProject.scenario?.scenarioTitle || project.title,
+            fullProject.nodes,
+            fullProject.edges || []
+          );
+          
+          console.log('ProjectCard: Scenario exported successfully:', {
+            nodes: exportedScenario.nodes?.length,
+            edges: exportedScenario.edges?.length,
+            mediaCount: Object.keys(exportedScenario.media || {}).length,
           });
           
-          setScenario({
-            nodes: fullProject.nodes || [],
-            media: mediaMap,
-            edges: fullProject.edges || []
-          });
+          setScenario(exportedScenario);
         } else {
           console.log('ProjectCard: Invalid project structure');
         }
@@ -153,7 +112,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     };
 
     loadScenario();
-  }, [project.projectId, isMediaLibraryReady]);
+  }, [project.projectId, isMediaLibraryReady, project.title]);
 
   // Gérer le hover
   const handleMouseEnter = () => {
@@ -188,125 +147,104 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   return (
     <>
       <Card>
-        <CardActionArea 
-          onClick={() => onProjectSelect(project.projectId)}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-        >
-          <Box sx={{ height: 140, bgcolor: 'background.paper', position: 'relative' }}>
-            {isLoading ? (
-              <Box
-                sx={{
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  bgcolor: 'action.hover'
-                }}
-              >
-                <CircularProgress size={24} />
-              </Box>
-            ) : scenario ? (
-              <>
-                <MiniPovPlayer scenario={scenario} isHovered={isHovered} />
-                {isHovered && (
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      transform: 'translate(-50%, -50%)',
-                      zIndex: 1,
-                    }}
-                  >
-                    <IconButton
-                      onClick={handlePlayScenario}
+        <div onClick={() => onProjectSelect(project.projectId)}>
+          <Box sx={{ position: 'relative', width: '100%', paddingTop: '56.25%' }}>
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                bgcolor: 'background.default'
+              }}
+            >
+              {isLoading ? (
+                <Box
+                  sx={{
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: 'action.hover'
+                  }}
+                >
+                  <CircularProgress size={24} />
+                </Box>
+              ) : scenario ? (
+                <Box
+                  sx={{
+                    width: '100%',
+                    height: '100%',
+                    position: 'relative'
+                  }}
+                  onMouseEnter={handleMouseEnter}
+                  onMouseLeave={handleMouseLeave}
+                >
+                  <MiniPovPlayer scenario={scenario} isHovered={isHovered} />
+                  {isHovered && (
+                    <Box
                       sx={{
-                        bgcolor: 'rgba(0, 0, 0, 0.5)',
-                        '&:hover': {
-                          bgcolor: 'rgba(0, 0, 0, 0.7)',
-                        },
-                        color: 'white',
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        zIndex: 1,
                       }}
                     >
-                      <PlayArrowIcon fontSize="large" />
-                    </IconButton>
-                  </Box>
-                )}
-              </>
-            ) : (
-              <Box
-                sx={{
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  bgcolor: 'action.hover'
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">
-                  Aucun média disponible
-                </Typography>
-              </Box>
-            )}
-          </Box>
-          <CardContent sx={{ flexGrow: 1 }}>
-            <Box sx={{ mb: 2 }}>
-              <Typography 
-                variant="caption" 
-                color="text.secondary" 
-                sx={{ 
-                  display: 'block',
-                  mb: 0.5 
-                }}
-              >
-                Point POV
-              </Typography>
-              <Typography 
-                variant="h6" 
-                component="h2" 
-                sx={{
-                  fontFamily: 'monospace',
-                  bgcolor: 'background.default',
-                  p: 1,
-                  borderRadius: 1,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  fontSize: '0.9rem'
-                }} 
-                noWrap
-              >
-                {project.scenario?.povTitle || `${project.scenario?.scenarioTitle?.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'sans-titre'}_${formatDate(project.updatedAt).split(' ')[0]}.pov`}
-              </Typography>
+                      <IconButton
+                        onClick={handlePlayScenario}
+                        sx={{
+                          bgcolor: 'rgba(0, 0, 0, 0.5)',
+                          '&:hover': {
+                            bgcolor: 'rgba(0, 0, 0, 0.7)',
+                          },
+                          color: 'white',
+                        }}
+                      >
+                        <PlayArrowIcon fontSize="large" />
+                      </IconButton>
+                    </Box>
+                  )}
+                </Box>
+              ) : (
+                <Box
+                  sx={{
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    bgcolor: 'action.hover'
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    Aucun média disponible
+                  </Typography>
+                </Box>
+              )}
             </Box>
-            {project.scenario?.scenarioTitle && (
-              <Typography 
-                variant="subtitle1"
-                sx={{ 
-                  mb: 1,
-                  fontWeight: 600
-                }} 
-                noWrap
-              >
-                {project.scenario.scenarioTitle}
-              </Typography>
-            )}
-            {project.scenario?.description && (
-              <Typography variant="body2" color="text.secondary" sx={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-              }}>
-                {project.scenario.description}
-              </Typography>
-            )}
-            <Typography variant="caption" color="text.secondary" display="block">
+          </Box>
+          <CardContent>
+            <Typography 
+              variant="h6" 
+              component="div" 
+              fontWeight="bold" 
+              gutterBottom
+            >
+              {project.scenario?.scenarioTitle || project.title}
+            </Typography>
+            <Typography 
+              variant="caption" 
+              color="text.secondary" 
+              display="block"
+            >
               Modifié le {formatDate(project.updatedAt)}
             </Typography>
           </CardContent>
-        </CardActionArea>
+        </div>
         <CardActions>
           <IconButton
             size="small"
