@@ -52,6 +52,7 @@ interface MediaNodeProps {
         volume?: number;
         fadeIn?: number;
         fadeOut?: number;
+        autoPlay?: boolean;
       };
       choices?: Array<{
         id: string;
@@ -65,6 +66,16 @@ interface MediaNodeProps {
   };
   selected?: boolean;
 }
+
+interface AudioState {
+  volume: number;
+  isMuted: boolean;
+  isPlaying: boolean;
+  fadeInDuration: number;
+  fadeOutDuration: number;
+}
+
+const DEFAULT_FADE_DURATION = 1000; // 1 second
 
 const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
   // Media states
@@ -80,11 +91,16 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Audio states
-  const [volume, setVolume] = useState(data.content?.audio?.volume ?? 1);
-  const [isMuted, setIsMuted] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const timerRef = useRef<NodeJS.Timeout>();
+  const [audioState, setAudioState] = useState<AudioState>({
+    volume: data.content?.audio?.volume ?? 1,
+    isMuted: false,
+    isPlaying: false,
+    fadeInDuration: data.content?.audio?.fadeIn ?? DEFAULT_FADE_DURATION,
+    fadeOutDuration: data.content?.audio?.fadeOut ?? DEFAULT_FADE_DURATION
+  });
 
   // New state for button visibility
   const [showButtons, setShowButtons] = useState(false);
@@ -141,34 +157,142 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
 
   // Load audio on mount and when audioId changes
   useEffect(() => {
-    const loadAudio = async () => {
-      if (!data.audioId) {
-        setAudioUrl(undefined);
-        return;
-      }
-      try {
-        const mediaLibrary = await MediaLibraryService.getInstance();
-        const audio = await mediaLibrary.getMedia(data.audioId);
-        if (audio && audio.url) {
-          setAudioUrl(audio.url);
-          setError(undefined);
+    let audioUrl: string | null = null;
+
+    const setupAudio = async () => {
+      if (data.audioId) {
+        try {
+          const mediaLibrary = await MediaLibraryService.getInstance();
+          const audioFile = await mediaLibrary.getMediaFile(data.audioId);
+          if (audioFile) {
+            audioUrl = URL.createObjectURL(audioFile.file);
+            if (audioRef.current) {
+              audioRef.current.src = audioUrl;
+              audioRef.current.volume = audioState.volume;
+              audioRef.current.loop = data.content?.audio?.loop ?? true;
+            }
+          }
+        } catch (error) {
+          console.error('Error loading audio:', error);
         }
-      } catch (error) {
-        console.error('Error loading audio:', error);
-        setError('Failed to load audio');
       }
     };
-    loadAudio();
-    
-    // Cleanup function
+
+    setupAudio();
+
     return () => {
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.src = '';
-        audioRef.current.load();
       }
     };
   }, [data.audioId]);
+
+  // Gestion du fade in/out
+  const fadeVolume = useCallback((start: number, end: number, duration: number) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const steps = 20;
+    const stepTime = duration / steps;
+    const volumeStep = (end - start) / steps;
+    
+    let currentStep = 0;
+
+    const fade = () => {
+      if (!audio || currentStep >= steps) return;
+      
+      audio.volume = start + (volumeStep * currentStep);
+      currentStep++;
+      
+      if (currentStep < steps) {
+        setTimeout(fade, stepTime);
+      } else {
+        audio.volume = end;
+      }
+    };
+
+    fade();
+  }, []);
+
+  // Gestion de la lecture audio
+  const handlePlayAudio = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (!audioState.isPlaying) {
+      audio.volume = 0;
+      audio.play()
+        .then(() => {
+          fadeVolume(0, audioState.volume, audioState.fadeInDuration);
+          setAudioState(prev => ({ ...prev, isPlaying: true }));
+        })
+        .catch(error => console.error('Error playing audio:', error));
+    }
+  }, [audioState.volume, audioState.fadeInDuration, audioState.isPlaying, fadeVolume]);
+
+  const handlePauseAudio = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (audioState.isPlaying) {
+      fadeVolume(audio.volume, 0, audioState.fadeOutDuration);
+      setTimeout(() => {
+        audio.pause();
+        setAudioState(prev => ({ ...prev, isPlaying: false }));
+      }, audioState.fadeOutDuration);
+    }
+  }, [audioState.fadeOutDuration, audioState.isPlaying, fadeVolume]);
+
+  // Gestion du volume
+  const handleVolumeChange = useCallback((event: Event, newValue: number | number[]) => {
+    const newVolume = newValue as number;
+    setAudioState(prev => ({ ...prev, volume: newVolume }));
+    
+    if (audioRef.current && !audioState.isMuted) {
+      audioRef.current.volume = newVolume;
+    }
+
+    if (data.onDataChange) {
+      data.onDataChange(id, {
+        ...data,
+        content: {
+          ...data.content,
+          audio: {
+            ...data.content?.audio,
+            volume: newVolume
+          }
+        }
+      });
+    }
+  }, [id, data, audioState.isMuted]);
+
+  // Gestion du mute
+  const handleMuteToggle = useCallback(() => {
+    setAudioState(prev => {
+      const newIsMuted = !prev.isMuted;
+      if (audioRef.current) {
+        audioRef.current.volume = newIsMuted ? 0 : prev.volume;
+      }
+      return { ...prev, isMuted: newIsMuted };
+    });
+  }, []);
+
+  // Auto-play en mode lecture
+  useEffect(() => {
+    if (data.isPlaybackMode && data.content?.audio?.autoPlay) {
+      handlePlayAudio();
+    }
+    
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, [data.isPlaybackMode, data.content?.audio?.autoPlay, handlePlayAudio]);
 
   // Playback control effect
   useEffect(() => {
@@ -198,7 +322,7 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
             }
           }, stepTime);
         }
-        audioRef.current.play().catch(console.error);
+        handlePlayAudio();
       }
     } else {
       // Arrêter la lecture si on n'est pas en mode playback
@@ -207,7 +331,7 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
         setIsPlaying(false);
       }
       if (audioRef.current) {
-        audioRef.current.pause();
+        handlePauseAudio();
       }
     }
 
@@ -248,19 +372,19 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
   useEffect(() => {
     const initializeMedia = () => {
       if (audioRef.current) {
-        audioRef.current.volume = volume;
-        audioRef.current.muted = isMuted;
+        audioRef.current.volume = audioState.volume;
+        audioRef.current.muted = audioState.isMuted;
         audioRef.current.loop = data.content?.audio?.loop ?? false;
       }
       if (videoRef.current) {
-        videoRef.current.volume = volume;
-        videoRef.current.muted = isMuted;
+        videoRef.current.volume = audioState.volume;
+        videoRef.current.muted = audioState.isMuted;
         videoRef.current.loop = data.content?.timer?.loop ?? false;
       }
     };
 
     initializeMedia();
-  }, [volume, isMuted, data.content?.audio?.loop, data.content?.timer?.loop, mediaUrl, audioUrl]);
+  }, [audioState.volume, audioState.isMuted, data.content?.audio?.loop, data.content?.timer?.loop, mediaUrl, audioUrl]);
 
   // Timer effect for images
   useEffect(() => {
@@ -360,54 +484,6 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
     } catch (error) {
       console.error('Error selecting audio:', error);
       setError('Failed to select audio');
-    }
-  }, [id, data, data.onDataChange]);
-
-  // Handle volume change
-  const handleVolumeChange = useCallback((event: Event, newValue: number | number[]) => {
-    const newVolume = newValue as number;
-    setVolume(newVolume);
-    if (audioRef.current) {
-      audioRef.current.volume = newVolume;
-    }
-    if (videoRef.current) {
-      videoRef.current.volume = newVolume;
-    }
-    if (data.onDataChange) {
-      data.onDataChange(id, {
-        ...data,
-        content: {
-          ...data.content,
-          audio: {
-            ...data.content?.audio,
-            volume: newVolume,
-          },
-        },
-      });
-    }
-  }, [id, data, data.onDataChange]);
-
-  // Handle mute toggle
-  const handleMuteToggle = useCallback(() => {
-    setIsMuted(!isMuted);
-    if (audioRef.current) {
-      audioRef.current.muted = !isMuted;
-    }
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-    }
-  }, [isMuted]);
-
-  // Handle timer settings
-  const handleTimerSave = useCallback((timer: { duration: number; autoTransition: boolean; loop: boolean }) => {
-    if (data.onDataChange) {
-      data.onDataChange(id, {
-        ...data,
-        content: {
-          ...data.content,
-          timer,
-        },
-      });
     }
   }, [id, data, data.onDataChange]);
 
@@ -565,7 +641,7 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
                 ref={audioRef}
                 src={audioUrl}
                 loop={data.content?.audio?.loop}
-                muted={isMuted}
+                muted={audioState.isMuted}
                 preload="auto"
                 onError={(e) => {
                   console.error('Audio error:', e);
@@ -643,11 +719,11 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
                   onClick={handleMuteToggle}
                   sx={{ color: 'white' }}
                 >
-                  {isMuted ? <VolumeOffIcon /> : <VolumeUpIcon />}
+                  {audioState.isMuted ? <VolumeOffIcon /> : <VolumeUpIcon />}
                 </IconButton>
                 <Slider
                   size="small"
-                  value={volume}
+                  value={audioState.volume}
                   onChange={handleVolumeChange}
                   min={0}
                   max={1}
@@ -777,7 +853,17 @@ const MediaNode: React.FC<MediaNodeProps> = ({ id, data, selected }) => {
             autoTransition: data.content?.timer?.autoTransition ?? false,
             loop: data.content?.timer?.loop ?? false,
           }}
-          onSave={handleTimerSave}
+          onSave={(timer) => {
+            if (data.onDataChange) {
+              data.onDataChange(id, {
+                ...data,
+                content: {
+                  ...data.content,
+                  timer,
+                },
+              });
+            }
+          }}
         />
       )}
 
