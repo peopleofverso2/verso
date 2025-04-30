@@ -1,111 +1,140 @@
+import { initializeApp } from 'firebase/app';
 import { 
+  getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
-  signOut, 
-  onAuthStateChanged,
+  signOut as firebaseSignOut,
+  onAuthStateChanged as firebaseOnAuthStateChanged,
   User
 } from 'firebase/auth';
-import { auth } from './firebaseConfig';
 
-export interface AuthUser {
-  uid: string;
-  email: string | null;
-  displayName: string | null;
-  photoURL: string | null;
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
+};
+
+// En mode développement, on utilise un mock si les variables d'environnement ne sont pas définies
+const isDevelopment = import.meta.env.DEV;
+const isFirebaseConfigured = firebaseConfig.apiKey && firebaseConfig.apiKey !== 'your_api_key';
+
+let auth: any;
+let googleProvider: any;
+
+if (isFirebaseConfigured) {
+  try {
+    const app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    googleProvider = new GoogleAuthProvider();
+  } catch (error) {
+    console.error('Error initializing Firebase:', error);
+  }
 }
 
 class AuthService {
   private static instance: AuthService;
-  private currentUser: AuthUser | null = null;
-  private authStateListeners: ((user: AuthUser | null) => void)[] = [];
+  private mockUser: User | null = null;
 
   private constructor() {
-    onAuthStateChanged(auth, (user) => {
-      this.currentUser = user ? this.formatUser(user) : null;
-      this.notifyListeners();
-    });
+    if (isDevelopment && !isFirebaseConfigured) {
+      console.warn('Firebase not configured. Using mock authentication for development.');
+      this.mockUser = {
+        uid: 'mock-user-id',
+        email: 'dev@example.com',
+        displayName: 'Developer',
+        photoURL: null,
+        emailVerified: true,
+        isAnonymous: false,
+        metadata: {},
+        providerData: [],
+        refreshToken: '',
+        tenantId: null,
+        delete: async () => {},
+        getIdToken: async () => '',
+        getIdTokenResult: async () => ({
+          token: '',
+          signInProvider: null,
+          expirationTime: '',
+          issuedAtTime: '',
+          authTime: '',
+          claims: {}
+        }),
+        reload: async () => {},
+        toJSON: () => ({})
+      } as User;
+    }
   }
 
-  static getInstance(): AuthService {
+  public static getInstance(): AuthService {
     if (!AuthService.instance) {
       AuthService.instance = new AuthService();
     }
     return AuthService.instance;
   }
 
-  private formatUser(user: User): AuthUser {
-    return {
-      uid: user.uid,
-      email: user.email,
-      displayName: user.displayName,
-      photoURL: user.photoURL
-    };
-  }
-
-  private notifyListeners() {
-    this.authStateListeners.forEach(listener => listener(this.currentUser));
-  }
-
-  private getErrorMessage(error: any): string {
-    if (!error) return 'An unknown error occurred';
-    
-    switch (error.code) {
-      case 'auth/operation-not-allowed':
-        return 'Google sign-in is not enabled. Please contact the administrator.';
-      case 'auth/popup-blocked':
-        return 'The sign-in popup was blocked. Please allow popups for this site.';
-      case 'auth/popup-closed-by-user':
-        return 'The sign-in was cancelled.';
-      case 'auth/unauthorized-domain':
-        return 'This domain is not authorized for sign-in. Please contact the administrator.';
-      default:
-        return error.message || 'Failed to sign in. Please try again.';
+  async signInWithGoogle(): Promise<void> {
+    if (!isFirebaseConfigured) {
+      if (isDevelopment) {
+        console.log('Mock sign in successful');
+        return;
+      }
+      throw new Error('Firebase is not configured');
     }
-  }
 
-  async signInWithGoogle(): Promise<AuthUser> {
     try {
-      console.log('Starting Google sign in...');
-      const provider = new GoogleAuthProvider();
-      console.log('Provider created');
-      const result = await signInWithPopup(auth, provider);
-      console.log('Sign in successful:', result.user.email);
-      return this.formatUser(result.user);
-    } catch (error: any) {
-      const errorMessage = this.getErrorMessage(error);
-      console.error('Error signing in with Google:', {
-        code: error.code,
-        message: errorMessage,
-        email: error.email,
-        credential: error.credential
-      });
-      throw new Error(errorMessage);
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error('Error signing in with Google:', error);
+      throw error;
     }
   }
 
   async signOut(): Promise<void> {
+    if (!isFirebaseConfigured) {
+      if (isDevelopment) {
+        console.log('Mock sign out successful');
+        return;
+      }
+      throw new Error('Firebase is not configured');
+    }
+
     try {
-      await signOut(auth);
+      await firebaseSignOut(auth);
     } catch (error) {
       console.error('Error signing out:', error);
       throw error;
     }
   }
 
-  getCurrentUser(): AuthUser | null {
-    return this.currentUser;
-  }
+  onAuthStateChanged(callback: (user: User | null) => void) {
+    if (!isFirebaseConfigured) {
+      if (isDevelopment) {
+        // Simuler un délai pour le mock
+        setTimeout(() => callback(this.mockUser), 100);
+        return () => {};
+      }
+      console.warn('Firebase not configured, auth state changes will not be monitored');
+      return () => {};
+    }
 
-  onAuthStateChange(listener: (user: AuthUser | null) => void): () => void {
-    this.authStateListeners.push(listener);
-    // Return unsubscribe function
-    return () => {
-      this.authStateListeners = this.authStateListeners.filter(l => l !== listener);
-    };
+    return firebaseOnAuthStateChanged(auth, callback);
   }
 
   isAuthenticated(): boolean {
-    return this.currentUser !== null;
+    if (!isFirebaseConfigured && isDevelopment) {
+      return true; // En développement, toujours authentifié si Firebase n'est pas configuré
+    }
+    return auth?.currentUser !== null;
+  }
+
+  getCurrentUser(): User | null {
+    if (!isFirebaseConfigured && isDevelopment) {
+      return this.mockUser;
+    }
+    return auth?.currentUser;
   }
 }
 
